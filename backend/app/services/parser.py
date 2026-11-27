@@ -641,29 +641,46 @@ def _resolve_variant(
     text: str, candidates: List[Candidate], catalogue: List[Dict]
 ) -> Optional[Dict]:
     """Try to resolve which variant the user picked from candidates."""
-    # Check for direct ID or number matching
-    numbers = _extract_numbers(text)
-    for candidate in candidates:
-        # Check if user said the product name or a distinguishing word
-        name_lower = candidate.product_name.lower()
-        if any(word in text for word in name_lower.split() if len(word) > 2):
-            # Find the catalogue entry
-            for item in catalogue:
-                if item["id"] == candidate.product_id:
-                    return item
+    text_clean = text.strip().lower()
 
-    # Check for size keywords
+    def _find_item(candidate: Candidate) -> Optional[Dict]:
+        for item in catalogue:
+            if item["id"] == candidate.product_id:
+                return item
+        return None
+
+    # 1. Exact or full candidate name match first (handles tapping any candidate card)
+    for candidate in candidates:
+        name_lower = candidate.product_name.lower()
+        if name_lower == text_clean or name_lower in text_clean:
+            return _find_item(candidate)
+
+    # 2. Size / variant keywords (handles bare "1 kg", "5 kg", "small", "big", etc.)
     size_patterns = {
-        "1kg": ["1 kilo", "1kg", "chhota", "chota", "small", "sanna"],
-        "5kg": ["5 kilo", "5kg", "bada", "big", "dodda", "large"],
+        "1kg": ["1 kg", "1 kilo", "1kg", "one kg", "one kilo", "chhota", "chota", "small", "sanna"],
+        "5kg": ["5 kg", "5 kilo", "5kg", "five kg", "five kilo", "bada", "big", "dodda", "large"],
+        "500ml": ["500 ml", "500ml", "half liter", "half litre", "aadha"],
+        "1l": ["1 l", "1l", "1 liter", "1 litre", "one liter", "one litre"],
+        "small": ["small", "chhota", "chota", "sanna"],
+        "big": ["big", "bada", "dodda", "large"],
     }
     for size, keywords in size_patterns.items():
-        if any(kw in text for kw in keywords):
+        if any(kw in text_clean for kw in keywords):
             for candidate in candidates:
-                if size.lower() in candidate.product_name.lower():
-                    for item in catalogue:
-                        if item["id"] == candidate.product_id:
-                            return item
+                if size in candidate.product_name.lower():
+                    return _find_item(candidate)
+
+    # 3. Distinguishing word match (words unique to one candidate, not shared across all)
+    if candidates:
+        word_sets = [set(c.product_name.lower().split()) for c in candidates]
+        shared_words = set.intersection(*word_sets) if len(word_sets) > 1 else set()
+        for candidate in candidates:
+            unique_words = [
+                w for w in candidate.product_name.lower().split()
+                if len(w) > 1 and w not in shared_words
+            ]
+            if any(w in text_clean for w in unique_words):
+                return _find_item(candidate)
 
     return None
 

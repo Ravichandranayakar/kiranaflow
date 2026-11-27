@@ -15,9 +15,9 @@ cd kiranaflow
 docker compose up --build
 ```
 
+- **Frontend App:** [http://localhost:8080](http://localhost:8080) *(if port 8080 is busy on your machine, run `FRONTEND_PORT=8085 docker compose up --build`)*
 - **Backend API:** [http://localhost:8000](http://localhost:8000)
-- **Health Check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
-- **Frontend:** [http://localhost:8080](http://localhost:8080) *(coming in Step 4)*
+- **Health Check:** [http://localhost:8080/api/health](http://localhost:8080/api/health)
 
 ## Project Structure
 

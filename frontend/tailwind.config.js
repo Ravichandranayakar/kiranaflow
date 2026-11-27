@@ -1,0 +1,43 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        background: '#fbf9f3',
+        surface: '#fbf9f3',
+        'surface-bright': '#fbf9f3',
+        'surface-container-lowest': '#ffffff',
+        'surface-container-low': '#f5f3ed',
+        'surface-container': '#f0eee8',
+        'surface-container-high': '#eae8e2',
+        'surface-container-highest': '#e4e2dd',
+        'surface-dim': '#dcdad4',
+        'primary-container': '#1c1b1b',
+        'on-primary': '#ffffff',
+        'on-primary-container': '#858383',
+        'secondary-fixed': '#c6f26a',
+        'secondary-fixed-dim': '#abd551',
+        'secondary-container': '#c6f26a',
+        'on-secondary-fixed': '#141f00',
+        'on-secondary-fixed-variant': '#374e00',
+        secondary: '#39734c',
+        warning: '#a56a2a',
+        'on-surface': '#1b1c18',
+        'on-surface-variant': '#444748',
+        outline: '#747878',
+        'outline-variant': '#dedad1',
+        error: '#b54a42',
+        'error-container': '#ffdad6',
+        'on-error-container': '#93000a',
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Space Grotesk', 'system-ui', 'sans-serif'],
+        serif: ['Playfair Display', 'Georgia', 'serif'],
+        brand: ['Syne', 'Space Grotesk', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+};
