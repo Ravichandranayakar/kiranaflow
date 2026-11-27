@@ -53,11 +53,3 @@ kiranaflow/
 | Voice Output | speechSynthesis (browser-native) | Zero API keys, with text fallback |
 | Smart Parser | Optional (LLM via user-supplied key) | Graceful degradation to deterministic parser |
 
-## Zero Secret Keys
-
-The app starts and runs its full core flow without any API keys.
-If you want to enable the optional LLM-based smart parser, copy `.env.example` to `.env` and set `LLM_API_KEY`.
-
-## Team
-
-**Team Seora** — Build for Bharat 2026
