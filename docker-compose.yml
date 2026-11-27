@@ -1,0 +1,43 @@
+# ── KiranaFlow — Docker Compose ────────────────────────────────
+# Start the full stack with: docker compose up --build
+# App available at: http://localhost:8080 (frontend, Step 4)
+# API available at: http://localhost:8000 (backend)
+#
+# Zero API keys required. Everything works out of the box.
+
+services:
+  # ── PostgreSQL 16 ──────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kiranaflow
+      POSTGRES_PASSWORD: kiranaflow_dev
+      POSTGRES_DB: kiranaflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host port exposed — only the backend connects internally.
+    # This avoids port 5432 collisions if the judge runs Postgres locally.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiranaflow -d kiranaflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── FastAPI Backend ────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://kiranaflow:kiranaflow_dev@db:5432/kiranaflow
+      CORS_ORIGINS: "http://localhost:8080,http://localhost:5173,http://localhost:3000"
+      LLM_API_KEY: ""
+      DEFAULT_LANGUAGE: "en"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
