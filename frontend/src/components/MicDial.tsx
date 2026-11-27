@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Check, Loader2, Mic, Send } from 'lucide-react';
+import { Check, Keyboard, Loader2, Mic, Send } from 'lucide-react';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { FlowState, LangCode } from '../types/api';
 
@@ -287,9 +287,10 @@ export function MicDial({
           <button
             type="button"
             onClick={() => setShowTextBox((v) => !v)}
-            className="mt-1 font-display text-[11px] font-semibold text-[#1b1c18] underline underline-offset-4"
+            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#dedad1] shadow-xs font-display text-xs font-semibold text-[#1b1c18] hover:border-[#1c1b1b] active:scale-[0.98] transition-all"
           >
-            {showTextBox ? t.hideTextInput : t.orTypeInstead}
+            <Keyboard className="w-4 h-4 text-[#4b6700]" />
+            <span>{showTextBox ? t.hideTextInput : t.orTypeInstead}</span>
           </button>
         )}
       </div>
