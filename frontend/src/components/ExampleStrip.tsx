@@ -71,7 +71,7 @@ export function ExampleStrip({ lang, onSelectExample, disabled = false }: Exampl
       <span className="font-display text-[10px] font-semibold text-[#444748] uppercase tracking-[0.12em]">
         {t.tryTestCase}
       </span>
-      <div className="flex items-stretch gap-2 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex flex-wrap gap-2 pb-1">
         {EXAMPLES.map((item) => {
           const active = activeId === item.id;
           return (
@@ -83,7 +83,7 @@ export function ExampleStrip({ lang, onSelectExample, disabled = false }: Exampl
                 setActiveId(item.id);
                 onSelectExample(item.transcript);
               }}
-              className={`shrink-0 px-3.5 py-2 rounded-lg flex items-center shadow-sm transition-colors border ${
+              className={`px-3.5 py-2 rounded-lg flex items-center shadow-sm transition-colors border ${
                 active
                   ? 'bg-[#1c1b1b] text-[#c6f26a] border-[#1c1b1b]'
                   : 'bg-white text-[#1b1c18] border-[#dedad1] hover:border-[#1c1b1b]'
