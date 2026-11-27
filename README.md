@@ -35,21 +35,20 @@ kiranaflow/
 │       ├── db.py               # SQLAlchemy engine & session
 │       ├── models/
 │       │   └── db_models.py    # Product, ProductAlias, StockMovement
-│       ├── routes/             # API route modules (Step 2+)
+│       ├── routes/             # API route modules
 │       └── services/
 │           ├── seed.py         # 15 Indian grocery SKUs + aliases
-│           └── parser.py       # Deterministic voice parser (Step 2)
-└── frontend/                   # React + TypeScript + Tailwind (Step 4)
+│           └── parser.py       # Deterministic voice parser
+└── frontend/                   # React + TypeScript + Tailwind
 ```
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Backend | Python 3.12 + FastAPI + Pydantic v2 | Fast, typed, async-ready |
-| Database | PostgreSQL 16 | ACID transactions, atomic stock updates |
-| Frontend | React + TypeScript + Vite + Tailwind | Mobile-first, high-contrast UI |
-| Voice Input | Web Speech API (browser-native) | Zero API keys, works in Chrome |
-| Voice Output | speechSynthesis (browser-native) | Zero API keys, with text fallback |
-| Smart Parser | Optional (LLM via user-supplied key) | Graceful degradation to deterministic parser |
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.12, FastAPI, Pydantic v2 |
+| Database | PostgreSQL 16 |
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Voice Input | Web Speech API |
+| Voice Output | Web Speech Synthesis |
 
