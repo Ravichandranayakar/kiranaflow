@@ -2,9 +2,50 @@
 
 **Voice-first delivery & inventory assistant for Indian kirana stores.**
 
-Built for the Scaler × Wispr Flow Hackathon (Round 2).
+Built for the Scaler × Wispr Flow Hackathon (Round 2). KiranaFlow lets shopkeepers log supplier deliveries hands-free in **English, Hindi, Kannada, Hinglish, and Kanglish** while managing customers at the counter—separating **usable shelf stock** from **damaged items for supplier return**, catching ambiguous counts (`14` vs `40`) and mid-sentence self-corrections (`illa illa`), and **never writing to PostgreSQL until explicitly confirmed**.
 
-KiranaFlow lets shopkeepers log supplier deliveries hands-free in **English, Hindi, Kannada, Hinglish, and Kanglish** while unloading crates—separating **usable shelf stock** from **damaged stock for supplier return**, catching ambiguous quantities (`14` vs `40`) and mid-sentence self-corrections (`illa illa`), and **never updating inventory until explicitly confirmed**.
+---
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser (Chrome / Mobile-First React SPA)"]
+        UI["Speak / Stock / History UI\n(React 18 + Tailwind)"]
+        Voice["Web Speech API\n(en-IN / hi-IN / kn-IN)"]
+    end
+
+    subgraph Compose["Docker Compose Stack (Zero API Keys)"]
+        Nginx["Nginx (:8080 / :8085)\nStatic SPA + /api/ Proxy"]
+        API["FastAPI Backend (:8000)\nPydantic v2 + SQLAlchemy 2.0"]
+        Parser["Deterministic Parser\n(backend/app/services/parser.py)"]
+        DB[("PostgreSQL 16 (:5432 internal)\nproducts | product_aliases | stock_movements")]
+    end
+
+    Voice --> UI
+    UI -->|"HTTP JSON"| Nginx
+    Nginx -->|"proxy_pass /api/"| API
+    API <--> Parser
+    API <-->|"Atomic UPDATE + INSERT"| DB
+```
+
+---
+
+## Voice Safety & Commit Flow
+
+Every spoken or typed turn is evaluated by the backend state machine; inventory updates execute atomically only after confirmation:
+
+```mermaid
+flowchart LR
+    Input(["Speak or Type\n(EN / HI / KN)"]) --> Parse["POST /api/voice/parse\nDeterministic Extraction"]
+    Parse --> Guard{"Ambiguity or\nMissing Field?"}
+    Guard -->|"Yes"| Clarify["Quick Clarification Card\n(teen_tens / variant / damaged_qty / unknown_sku)"]
+    Clarify --> Parse
+    Guard -->|"No"| Readback["Awaiting Confirmation\nLocalized Read-Back + Usable Preview"]
+    Readback -->|"Edit / Correction"| Parse
+    Readback -->|"Confirm / Haan / Sari"| Commit["POST /api/deliveries/confirm\nAtomic SQL + UUID Idempotency"]
+    Commit --> Ledger[("Stock Ledger & Audit Trail\nusable_stock + damaged_stock")]
+```
 
 ---
 
@@ -14,35 +55,80 @@ KiranaFlow lets shopkeepers log supplier deliveries hands-free in **English, Hin
 git clone https://github.com/Ravichandranayakar/kiranaflow.git
 cd kiranaflow
 
-# Start PostgreSQL, FastAPI backend, and Nginx frontend (zero API keys needed)
+# Start PostgreSQL 16, FastAPI, and Nginx (zero API keys needed)
 docker compose up --build
 ```
 
-- **Frontend App:** [http://localhost:8080](http://localhost:8080) *(if port `8080` is occupied, run `FRONTEND_PORT=8085 docker compose up --build`)*
-- **Backend API:** [http://localhost:8000](http://localhost:8000)
-- **Health Check:** [http://localhost:8080/api/health](http://localhost:8080/api/health)
-- **Local Vite Dev (optional):** `cd frontend && npm install && npm run dev` → [http://localhost:5173](http://localhost:5173)
+| Service | URL | Notes |
+|---------|-----|-------|
+| **Frontend App** | [http://localhost:8080](http://localhost:8080) | Override port if needed: `FRONTEND_PORT=8085 docker compose up --build` |
+| **Backend API** | [http://localhost:8000](http://localhost:8000) | Interactive Swagger docs at `/docs` |
+| **Health Check** | [http://localhost:8080/api/health](http://localhost:8080/api/health) | Verifies live `SELECT 1` DB connection and active parser mode |
+| **Local Vite Dev** | [http://localhost:5173](http://localhost:5173) | Optional dev mode via `cd frontend && npm install && npm run dev` |
 
-> **Voice input note:** Browser speech recognition uses the Web Speech API (`en-IN` / `hi-IN` / `kn-IN`), which requires Google Chrome + an active internet connection for speech-to-text. Every screen also works offline/without a mic via **Or type instead** and the 5 one-tap **Try a test case** chips.
-
----
-
-## What It Solves in Practice
-
-1. **Speak / Type (`Speak` tab):** Tap the mic dial and say `"24 milk packets bandide 2 odada ide"`. Auto-stops after 1.5s of silence and parses product, received count, damaged count, usable delta, and unit.
-2. **Safety Guards (`NEEDS_CLARIFICATION`):** Catches `14` vs `40` teen/tens confusion, missing damage count, unknown SKUs, and mid-sentence self-corrections (`"10 fortune oil illa illa 12 packets 1 leaky"` → `12` received, `1` damaged).
-3. **Explicit Confirmation (`AWAITING_CONFIRMATION`):** Reads back total usable vs damaged stock in the active language (`E / हि / ಕ`). Nothing writes to PostgreSQL until the user taps **Confirm & Save** or speaks `"Confirm"`, `"Haan"`, or `"Sari"`.
-4. **Live Shelf & Audit Trail (`Stock` & `History` tabs):** Updates `usable_stock` and `damaged_stock` atomically, generates a copy-ready **WhatsApp Reorder Draft** for low-stock SKUs, and logs the raw transcript in `stock_movements`.
+> **Voice & Offline Fallback:** Browser voice recognition uses Chrome's Web Speech API (`en-IN` / `hi-IN` / `kn-IN`) with WebRTC noise suppression and automatic `1.5s` silence stop. Every flow also works offline or in any browser via **Or type instead** and the 5 one-tap **Try a test case** chips.
 
 ---
 
-## Documentation Pack (`docs/`)
+## Key Capabilities & Safety Guards
+
+- **Zero External API Keys:** Runs completely locally out of the box (`LLM_API_KEY=""` by default). All alias matching, number extraction, unit mapping (`petis`, `darjan`, `patta`), and state transitions run in deterministic Python ([parser.py](backend/app/services/parser.py)).
+- **Confirm-Before-Write Guard:** Spoken confirmation commands (`Confirm`, `Haan`, `Sari`) are ignored outside `awaiting_confirmation`. Nothing touches stock until explicitly confirmed.
+- **Mishearing & Correction Protection:** Flags teen/tens ambiguity (`13↔30` through `19↔90`) and resolves mid-sentence corrections (`illa illa`, `no no`, `actually`) while keeping the product name from the full sentence.
+- **Usable vs. Return Accounting:** Separates sellable `usable_stock` from supplier-claim `damaged_stock` across both `products` and immutable `stock_movements`.
+- **Race-Free & Idempotent Commits:** Uses SQL atomic increments (`usable_stock = usable_stock + delta`) and a `UNIQUE` UUID `idempotency_key` so retried requests never double-count.
+- **Reorder Drafts & Multilingual UI:** Instant header switching between English (`E`), Hindi (`हि`), and Kannada (`ಕ`), low-stock filtering, and one-click **Copy WhatsApp Reorder Draft** on the **Stock** tab.
+
+---
+
+## Verified Inputs to Test
+
+| Input Phrase | Parsed Outcome |
+|--------------|----------------|
+| `"24 milk packets bandide 2 odada ide"` | `Nandini Toned Milk 500ml` → `24` received, `2` damaged, `+22` usable |
+| `"14 milk packets"` | Triggers `teen_tens` guard → asks `"Did you say 14 or 40?"` |
+| `"10 fortune oil illa illa 12 packets 1 leaky"` | `Fortune Sunflower Oil 1L` → drops `10`, keeps `12` received, `1` damaged |
+| `"10 cheeni 2 kharab"` | `Loose Sugar 1kg` → `10` received, `2` damaged, `+8` usable |
+| `"10 packets amul butter"` | Returns `unknown_sku` without modifying catalogue or stock |
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/api/health` | PostgreSQL connectivity check (`SELECT 1`) and parser status |
+| `POST` | `/api/voice/parse` | Parse utterance against 15 seeded SKUs and echo full `PendingDraft` |
+| `POST` | `/api/deliveries/confirm` | Atomically commit confirmed entry and enforce `idempotency_key` |
+| `GET` | `/api/stock` | Return current `usable_stock`, `damaged_stock`, and `is_low` status |
+| `GET` | `/api/stock/movements` | Return immutable chronological delivery audit log |
+
+Full live-captured request/response JSON payloads are in [docs/08-api-reference.md](docs/08-api-reference.md).
+
+---
+
+## Testing
+
+```bash
+# Run standalone deterministic parser unit suite (no Docker or DB required)
+python -m pytest backend/tests/ -v
+# 33 passed in 0.36s
+
+# Type-check frontend
+cd frontend && npx tsc -b --noEmit
+```
+
+Full verification results and PostgreSQL idempotency evidence are documented in [docs/09-test-plan-and-results.md](docs/09-test-plan-and-results.md).
+
+---
+
+## Documentation (`docs/`)
 
 | Document | Scope |
 |----------|-------|
 | [01 — Problem & Solution](docs/01-problem-and-solution.md) | Kirana pain point, voice-first rationale, MVP scope boundaries |
-| [02 — Software Requirements (SRS)](docs/02-srs.md) | 12 functional + 6 non-functional requirements traced to code |
-| [03 — Use Cases](docs/03-use-cases.md) | Use-case diagram & UC-01..UC-11 workflows |
+| [02 — Software Requirements (SRS)](docs/02-srs.md) | 12 functional + 6 non-functional requirements traced to source files |
+| [03 — Use Cases](docs/03-use-cases.md) | Mermaid use-case diagram & UC-01..UC-10 specifications |
 | [04 — System Architecture](docs/04-architecture.md) | Component, Docker deployment, and Level-0 DFD Mermaid diagrams |
 | [05 — Sequence Diagrams](docs/05-sequences.md) | Multi-turn `/api/voice/parse` loop & atomic `/api/deliveries/confirm` |
 | [06 — State Machine & Parser](docs/06-activity-state-machine.md) | Frontend state diagram, parser activity flowchart, linguistic tables |
@@ -61,7 +147,7 @@ kiranaflow/
 ├── docker-compose.yml            # PostgreSQL 16 + FastAPI + Nginx startup
 ├── .env.example                  # Optional environment configuration template
 ├── README.md
-├── docs/                         # Engineering documentation & Mermaid diagrams
+├── docs/                         # Architecture, API, schema, test, and ADR docs
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
