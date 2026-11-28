@@ -71,8 +71,38 @@ export function pickRecordingFormat(): { mimeType: string; filename: string } {
   );
 }
 
-export function speakText(text: string, lang: LangCode, muted = false): void {
+let activeSpeakTimer: number | null = null;
+
+function clearSpeakTimer() {
+  if (activeSpeakTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(activeSpeakTimer);
+    activeSpeakTimer = null;
+  }
+}
+
+export function speakText(
+  text: string,
+  lang: LangCode,
+  muted = false,
+  onDone?: () => void,
+): void {
+  clearSpeakTimer();
+  let completed = false;
+  const finish = (delayMs = 0) => {
+    if (completed || !onDone || typeof window === 'undefined') return;
+    completed = true;
+    if (delayMs > 0) {
+      activeSpeakTimer = window.setTimeout(() => {
+        activeSpeakTimer = null;
+        onDone();
+      }, delayMs);
+    } else {
+      onDone();
+    }
+  };
+
   if (muted || typeof window === 'undefined' || !('speechSynthesis' in window) || !text.trim()) {
+    finish(150);
     return;
   }
 
@@ -94,16 +124,25 @@ export function speakText(text: string, lang: LangCode, muted = false): void {
       utterance.voice = prefixMatch;
     } else if (lang !== 'en') {
       // Avoid forcing non-Latin Unicode through an en-US/en-GB desktop voice that only reads English words
+      finish(250);
       return;
+    }
+
+    if (onDone) {
+      utterance.onend = () => finish(350);
+      utterance.onerror = () => finish(250);
+      // Safety fallback in case browser TTS stalls without firing onend
+      activeSpeakTimer = window.setTimeout(() => finish(0), 9000);
     }
 
     window.speechSynthesis.speak(utterance);
   } catch {
-    // Never block the flow on TTS failures
+    finish(200);
   }
 }
 
 export function stopSpeaking(): void {
+  clearSpeakTimer();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();

@@ -83,6 +83,9 @@ export function useDeliveryFlow() {
 
   const recorderSessionRef = useRef<{ stop: (discard?: boolean) => void } | null>(null);
   const isStartingMicRef = useRef<boolean>(false);
+  const flowStateRef = useRef<FlowState>(flowState);
+  flowStateRef.current = flowState;
+  const startFollowUpMicRef = useRef<() => void>(() => {});
   const draftRef = useRef<PendingDraft>(EMPTY_DRAFT);
   draftRef.current = draft;
 
@@ -229,13 +232,38 @@ export function useDeliveryFlow() {
             ? formatLocalizedReadback(entries, langRef.current)
             : (res.readback_text ?? '');
         if (spokenReadback) {
-          speakText(spokenReadback, langRef.current, isMuted);
+          speakText(
+            spokenReadback,
+            langRef.current,
+            isMuted,
+            source === 'voice'
+              ? () => {
+                  if (
+                    flowStateRef.current === 'AWAITING_CONFIRMATION' &&
+                    !isConfirmingRef.current
+                  ) {
+                    startFollowUpMicRef.current();
+                  }
+                }
+              : undefined,
+          );
         }
       } else if (res.status === 'clarify' || res.status === 'unknown') {
         setFlowState('NEEDS_CLARIFICATION');
         const spokenQ = formatLocalizedQuestion(res, res.draft, langRef.current);
         if (spokenQ) {
-          speakText(spokenQ, langRef.current, isMuted);
+          speakText(
+            spokenQ,
+            langRef.current,
+            isMuted,
+            source === 'voice' && res.status === 'clarify'
+              ? () => {
+                  if (flowStateRef.current === 'NEEDS_CLARIFICATION') {
+                    startFollowUpMicRef.current();
+                  }
+                }
+              : undefined,
+          );
         }
       } else if (res.status === 'error') {
         if (res.question_kind === 'noise' && !res.raw_transcript) {
@@ -255,6 +283,8 @@ export function useDeliveryFlow() {
 
   const submitTranscript = useCallback(
     async (rawText: string, source: InputSource = 'text') => {
+      stopSpeaking();
+      recorderSessionRef.current?.stop(true);
       const cleaned = rawText.trim();
       if (!cleaned) return;
 
@@ -283,6 +313,8 @@ export function useDeliveryFlow() {
   );
 
   const confirmCurrentDraft = useCallback(async () => {
+    stopSpeaking();
+    recorderSessionRef.current?.stop(true);
     if (isConfirmingRef.current) return;
     const singleFallback = parseResult?.entry ?? buildEntryFromDraft(draft);
     const toCommit =
@@ -445,26 +477,27 @@ export function useDeliveryFlow() {
     );
   }, []);
 
-  const toggleListening = useCallback(async () => {
-    // Second tap while active stops recording cleanly and kicks off transcription
-    if (flowState === 'LISTENING' || recorderSessionRef.current) {
-      recorderSessionRef.current?.stop(false);
-      return;
-    }
+  const toggleListening = useCallback(
+    async (silentNoVoice = false) => {
+      // Second tap while active stops recording cleanly and kicks off transcription
+      if (flowState === 'LISTENING' || recorderSessionRef.current) {
+        recorderSessionRef.current?.stop(false);
+        return;
+      }
 
-    if (isStartingMicRef.current) {
-      return;
-    }
+      if (isStartingMicRef.current) {
+        return;
+      }
 
-    if (!micSupported) {
-      setMicError('Microphone recording is unavailable in this browser — use text input below.');
-      return;
-    }
+      if (!micSupported) {
+        setMicError('Microphone recording is unavailable in this browser — use text input below.');
+        return;
+      }
 
-    isStartingMicRef.current = true;
-    stopSpeaking();
-    setMicError(null);
-    setInterimTranscript('');
+      isStartingMicRef.current = true;
+      stopSpeaking();
+      setMicError(null);
+      setInterimTranscript('');
 
     let stream: MediaStream;
     try {
@@ -645,7 +678,9 @@ export function useDeliveryFlow() {
 
         noVoiceTimer = window.setTimeout(() => {
           if (!stopped && !speechHeard) {
-            setMicError('No voice detected — tap mic and speak, or type below.');
+            if (!silentNoVoice) {
+              setMicError('No voice detected — tap mic and speak, or type below.');
+            }
             stopSession(true);
           }
         }, 7000);
@@ -667,6 +702,17 @@ export function useDeliveryFlow() {
       setFlowState('IDLE');
     }
   }, [applyParseResponse, flowState, micSupported, restoreNonListeningState]);
+
+  startFollowUpMicRef.current = () => {
+    if (
+      flowStateRef.current !== 'LISTENING' &&
+      !recorderSessionRef.current &&
+      !isStartingMicRef.current &&
+      micSupported
+    ) {
+      void toggleListening(true);
+    }
+  };
 
   return {
     lang,

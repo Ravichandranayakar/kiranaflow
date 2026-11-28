@@ -156,6 +156,8 @@ export interface UIStrings {
   itemsWord: string;
   receivedPausedNote: string;
   queuedLabel: string;
+  speakConfirmOrEditBtn: string;
+  listeningReplyStopBtn: string;
 }
 
 export const TRANSLATIONS: Record<LangCode, UIStrings> = {
@@ -249,7 +251,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     usableToAdd: 'USABLE TO ADD',
     usableNote: 'Total inventory updates only after you confirm.',
     readBackLabel: 'READ-BACK',
-    confirmHintVoice: 'Or say “Confirm”, “Haan”, or “Sari” to save via mic',
+    confirmHintVoice: 'Say “OK”, “Ya”, “Confirm”, “Haan”, “Sari” — or say edits (e.g. “3 damaged”)',
     editDetails: 'Edit details',
     cancelEntry: 'Cancel entry',
     savingProgress: 'SAVING…',
@@ -315,6 +317,8 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     itemsWord: 'items',
     receivedPausedNote: 'Tap a quick quantity above, or speak/type the exact received count.',
     queuedLabel: 'Queued',
+    speakConfirmOrEditBtn: 'Speak “OK / Confirm” or Edit',
+    listeningReplyStopBtn: 'Listening for “OK / Confirm” or edit… Tap to stop',
   },
   hi: {
     serviceConnected: 'सेवा जुड़ी है',
@@ -406,7 +410,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     usableToAdd: 'जोड़ने योग्य स्टॉक',
     usableNote: 'पुष्टि करने के बाद ही कुल स्टॉक अपडेट होगा।',
     readBackLabel: 'वॉयस पुष्टि',
-    confirmHintVoice: 'माइक से सहेजने के लिए “Confirm”, “हाँ” या “सरी” बोलें',
+    confirmHintVoice: 'माइक से सहेजने के लिए “OK”, “Confirm”, “हाँ” बोलें — या बदलाव बोलें (उदा. “3 खराब”)',
     editDetails: 'विवरण बदलें',
     cancelEntry: 'रद्द करें',
     savingProgress: 'सहेज रहे हैं…',
@@ -472,6 +476,8 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     itemsWord: 'आइटम',
     receivedPausedNote: 'ऊपर संख्या चुनें या प्राप्त गिनती बोलकर/लिखकर बताएं।',
     queuedLabel: 'कतार में',
+    speakConfirmOrEditBtn: 'माइक से “OK / हाँ” या बदलाव बोलें',
+    listeningReplyStopBtn: 'सुन रहे हैं (“OK / हाँ” या बदलाव बोलें)… रोकने के लिए टैप करें',
   },
   kn: {
     serviceConnected: 'ಸೇವೆ ಸಂಪರ್ಕಗೊಂಡಿದೆ',
@@ -563,7 +569,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     usableToAdd: 'ಸೇರಿಸಬಹುದಾದ ದಾಸ್ತಾನು',
     usableNote: 'ನೀವು ದೃಢೀಕರಿಸಿದ ನಂತರವೇ ಒಟ್ಟು ದಾಸ್ತಾನು ಅಪ್‌ಡೇಟ್ ಆಗುತ್ತದೆ.',
     readBackLabel: 'ಧ್ವನಿ ಪರಿಶೀಲನೆ',
-    confirmHintVoice: 'ಮೈಕ್ ಮೂಲಕ ಉಳಿಸಲು “Confirm”, “ಹೌದು” ಅಥವಾ “ಸರಿ” ಹೇಳಿ',
+    confirmHintVoice: 'ಮೈಕ್ ಮೂಲಕ ಉಳಿಸಲು “OK”, “Confirm”, “ಹೌದು” ಅಥವಾ “ಸರಿ” ಹೇಳಿ — ಅಥವಾ ತಿದ್ದುಪಡಿ ಹೇಳಿ',
     editDetails: 'ವಿವರ ತಿದ್ದುಪಡಿ',
     cancelEntry: 'ರದ್ದುಮಾಡಿ',
     savingProgress: 'ಉಳಿಸಲಾಗುತ್ತಿದೆ…',
@@ -629,6 +635,8 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     itemsWord: 'ವಸ್ತುಗಳು',
     receivedPausedNote: 'ಮೇಲಿನ ಸಂಖ್ಯೆಯನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ ಅಥವಾ ಸ್ವೀಕರಿಸಿದ ಸಂಖ್ಯೆಯನ್ನು ಹೇಳಿ/ಟೈಪ್ ಮಾಡಿ.',
     queuedLabel: 'ಸರದಿಯಲ್ಲಿ',
+    speakConfirmOrEditBtn: 'ಮೈಕ್‌ನಲ್ಲಿ “OK / ಸರಿ” ಅಥವಾ ತಿದ್ದುಪಡಿ ಹೇಳಿ',
+    listeningReplyStopBtn: 'ಕೇಳುತ್ತಿದೆ (“OK / ಸರಿ” ಅಥವಾ ತಿದ್ದುಪಡಿ ಹೇಳಿ)… ನಿಲ್ಲಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ',
   },
 };
 

@@ -514,3 +514,38 @@ class TestMultiItemParsing:
         assert [e.usable for e in t2.entries] == [5, 6]
         confirmed = parse_transcript("Confirm.", t2.draft, TEST_CATALOGUE, "en")
         assert confirmed.action == "confirm"
+
+    def test_voice_confirm_variants_and_dual_edit(self):
+        """'ya confirm', 'ok', 'O.K.', 'houdu', dual quantity edit, and unclear 'edit' preserve awaiting_confirmation"""
+        base = parse_transcript("24 milk packets", PendingDraft(), TEST_CATALOGUE, "en")
+        assert base.draft.awaiting_confirmation is True
+
+        for phrase in ("ok", "O.K.", "ya confirm", "conform", "houdu"):
+            res = parse_transcript(phrase, base.draft, TEST_CATALOGUE, "en")
+            assert res.action == "confirm", f"Expected confirm for {phrase!r}"
+
+        unclear = parse_transcript("edit", base.draft, TEST_CATALOGUE, "en")
+        assert unclear.draft.awaiting_confirmation is True
+        after_unclear = parse_transcript("ok", unclear.draft, TEST_CATALOGUE, "en")
+        assert after_unclear.action == "confirm"
+
+        dual = parse_transcript("28 packets and 3 damaged", base.draft, TEST_CATALOGUE, "en")
+        assert dual.status == "complete"
+        assert dual.draft.received == 28
+        assert dual.draft.damaged == 3
+        assert dual.draft.usable == 25
+
+        dual_ambig = parse_transcript("30 packets and 3 damaged", base.draft, TEST_CATALOGUE, "en")
+        assert dual_ambig.status == "clarify"
+        assert dual_ambig.question_kind == "teen_tens"
+        assert dual_ambig.draft.damaged == 3
+
+    def test_batch_spoken_edit(self):
+        """Saying 'maggi 12' while awaiting a 2-item batch updates only Maggi"""
+        multi = parse_transcript("5 onion and 4 maggi", PendingDraft(), TEST_CATALOGUE, "en")
+        assert multi.entries is not None and len(multi.entries) == 2
+
+        edited = parse_transcript("maggi 12", multi.draft, TEST_CATALOGUE, "en")
+        assert edited.status == "complete"
+        assert edited.entries is not None
+        assert [e.usable for e in edited.entries] == [5, 12]

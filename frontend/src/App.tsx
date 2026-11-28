@@ -87,6 +87,7 @@ function KiranaFlowShell() {
                 onConfirm={() => void confirmCurrentDraft()}
                 onCancel={cancelCurrentDraft}
                 onEditQuantities={adjustDraftQuantities}
+                onToggleMic={() => void toggleListening()}
                 isConfirming={isConfirming}
                 lastCommitted={lastCommitted}
                 onNextEntry={resetToIdle}

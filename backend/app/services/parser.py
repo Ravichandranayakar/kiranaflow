@@ -93,7 +93,11 @@ CORRECTION_MARKERS = {
 
 # ── Confirm / Cancel Keywords ────────────────────────────────────────────────
 
-CONFIRM_KEYWORDS = {"confirm", "confirmed", "yes", "haan", "ha", "sari", "seri", "ok", "okay", "done", "save"}
+CONFIRM_KEYWORDS = {
+    "confirm", "confirmed", "conform", "conformed", "yes", "ya", "yeah",
+    "yep", "yup", "haan", "ha", "houdu", "haudu", "sari", "seri",
+    "ok", "okay", "done", "save", "theek", "thik",
+}
 CANCEL_KEYWORDS = {"cancel", "cancelled", "no", "nahi", "beda", "bedi", "skip", "discard", "chhodo"}
 
 # ── Unit Keywords ────────────────────────────────────────────────────────────
@@ -593,7 +597,8 @@ def _merge_clarification(
 
 def _tokenize_words(text: str) -> set:
     """Split text into lowercase words while ignoring trailing punctuation such as '.' or ','."""
-    return set(_PUNCT_RE.sub(" ", text.lower()).split())
+    normalized = text.lower().replace("o.k.", "ok").replace("o.k", "ok")
+    return set(_PUNCT_RE.sub(" ", normalized).split())
 
 
 def _handle_confirmation_turn(
@@ -642,25 +647,93 @@ def _handle_confirmation_turn(
         )
 
     # Neither confirm nor cancel — treat as a correction
+    numbers = _extract_numbers(text_lower)
+    has_damage_kw, damage_numbers, received_numbers = _partition_damage(text_lower, numbers)
+
+    # Batch item spoken correction (e.g., "maggi 12" or "onion 3 damaged")
+    if draft.queued_entries and len(draft.queued_entries) > 1 and numbers:
+        matches = _match_product(text_lower, catalogue)
+        match_ids = {m["id"] for m in matches}
+        updated_batch: List[PendingEntry] = []
+        changed_batch = False
+        for item in draft.queued_entries:
+            if item.product_id in match_ids:
+                new_rec = received_numbers[-1] if received_numbers else item.received
+                new_dmg = damage_numbers[-1] if (has_damage_kw and damage_numbers) else item.damaged
+                if has_damage_kw and not damage_numbers and numbers:
+                    new_dmg = numbers[-1]
+                    new_rec = item.received
+                if new_dmg > new_rec:
+                    new_dmg = item.damaged
+                updated_batch.append(
+                    PendingEntry(
+                        product_id=item.product_id,
+                        product_name=item.product_name,
+                        received=new_rec,
+                        damaged=new_dmg,
+                        usable=new_rec - new_dmg,
+                        unit=item.unit,
+                        idempotency_key=item.idempotency_key,
+                    )
+                )
+                changed_batch = True
+            else:
+                updated_batch.append(item)
+
+        if changed_batch:
+            first = updated_batch[0]
+            new_draft = PendingDraft(
+                product_id=first.product_id,
+                product_name=first.product_name,
+                received=first.received,
+                damaged=first.damaged,
+                usable=first.usable,
+                unit=first.unit,
+                awaiting_confirmation=True,
+                was_corrected=True,
+                idempotency_key=first.idempotency_key,
+                queued_entries=updated_batch,
+            )
+            return ParseResponse(
+                status="complete",
+                entry=first,
+                entries=updated_batch,
+                draft=new_draft,
+                readback_text=_format_multi_readback(updated_batch, lang),
+                raw_transcript=text_lower,
+            )
+
     new_draft = draft.model_copy()
-    new_draft.awaiting_confirmation = False
     new_draft.was_corrected = True
 
-    # Try to extract correction (e.g., "3 are damaged", "no, 40 packets")
-    numbers = _extract_numbers(text_lower)
-    has_damage = any(w in text_lower for w in DAMAGE_KEYWORDS)
-
-    if has_damage and numbers:
+    if has_damage_kw and damage_numbers and received_numbers:
+        new_draft.awaiting_confirmation = False
+        new_draft.received = received_numbers[-1]
+        new_draft.damaged = damage_numbers[-1]
+        new_draft.usable = new_draft.received - new_draft.damaged
+        if new_draft.received in TEEN_TENS_PAIRS:
+            alt = TEEN_TENS_PAIRS[new_draft.received]
+            new_draft.pending_question_kind = "teen_tens"
+            new_draft.teen_tens_options = sorted([new_draft.received, alt])
+            return ParseResponse(
+                status="clarify",
+                question=_format_teen_tens_question(new_draft.received, alt, lang),
+                question_kind="teen_tens",
+                draft=new_draft,
+                raw_transcript=text_lower,
+            )
+        return _try_complete(new_draft, text_lower, lang)
+    elif has_damage_kw and numbers:
+        new_draft.awaiting_confirmation = False
         new_draft.damaged = numbers[-1]
         if new_draft.received is not None:
             new_draft.usable = new_draft.received - new_draft.damaged
         return _try_complete(new_draft, text_lower, lang)
     elif numbers:
-        # Assume correcting received quantity
+        new_draft.awaiting_confirmation = False
         new_draft.received = numbers[-1]
         if new_draft.damaged is not None:
             new_draft.usable = new_draft.received - new_draft.damaged
-        # Check teen/tens on corrected number
         if new_draft.received in TEEN_TENS_PAIRS:
             alt = TEEN_TENS_PAIRS[new_draft.received]
             new_draft.pending_question_kind = "teen_tens"
@@ -674,10 +747,11 @@ def _handle_confirmation_turn(
             )
         return _try_complete(new_draft, text_lower, lang)
 
-    # Can't parse correction — ask to repeat
+    # Keep awaiting_confirmation = True so a follow-up "Confirm" / "OK" or quantity still works
+    new_draft.awaiting_confirmation = True
     return ParseResponse(
         status="clarify",
-        question="I didn't catch the correction. Please say the updated quantity.",
+        question="Say the updated quantity (e.g. '3 damaged' or '30 packets'), or say 'Confirm' to save.",
         question_kind="noise",
         draft=new_draft,
         raw_transcript=text_lower,

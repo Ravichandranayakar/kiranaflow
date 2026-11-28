@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, AudioLines, BookOpen, Check, CheckCheck, HelpCircle, Loader2, Pencil, Volume2, X } from 'lucide-react';
+import { ArrowRight, AudioLines, BookOpen, Check, CheckCheck, HelpCircle, Loader2, Mic, Pencil, Square, Volume2, X } from 'lucide-react';
 import type { CommittedReceipt } from '../hooks/useDeliveryFlow';
 import { speakText, hasBrowserVoice } from '../services/speech';
 import {
@@ -28,6 +28,7 @@ interface PendingReceiptCardProps {
   onConfirm: () => void;
   onCancel: () => void;
   onEditQuantities: (received: number, damaged: number) => void;
+  onToggleMic?: () => void;
   isConfirming?: boolean;
   lastCommitted?: CommittedReceipt | null;
   onNextEntry?: () => void;
@@ -57,6 +58,7 @@ export function PendingReceiptCard({
   onConfirm,
   onCancel,
   onEditQuantities,
+  onToggleMic,
   isConfirming = false,
   lastCommitted = null,
   onNextEntry,
@@ -100,6 +102,7 @@ export function PendingReceiptCard({
       ? formatLocalizedReadback(readbackEntries, lang)
       : (parseResult?.readback_text ?? '');
   const browserHasVoice = lang === 'en' || hasBrowserVoice(lang);
+  const isListeningFollowUp = flowState === 'LISTENING';
 
   useEffect(() => {
     setIsEditing(false);
@@ -130,8 +133,8 @@ export function PendingReceiptCard({
     );
   }
 
-  // LISTENING state: Screen 2 live voice status + waveform
-  if (flowState === 'LISTENING') {
+  // LISTENING state: only hide card on fresh initial utterance (preserve active review/clarify cards!)
+  if (flowState === 'LISTENING' && !draft.awaiting_confirmation && !draft.pending_question_kind) {
     return (
       <section className="px-5 -mt-4 relative z-10">
         <div className="bg-white rounded-2xl border border-[#dedad1] shadow-sm overflow-hidden">
@@ -207,7 +210,11 @@ export function PendingReceiptCard({
   }
 
   // NEEDS_CLARIFICATION state: Screen 4 (4A Variant + 4B Quantity main layout, plus 4C/4D/4E)
-  if (flowState === 'NEEDS_CLARIFICATION' && parseResult) {
+  if (
+    (flowState === 'NEEDS_CLARIFICATION' ||
+      (flowState === 'LISTENING' && Boolean(draft.pending_question_kind))) &&
+    parseResult
+  ) {
     const qKind = parseResult.question_kind ?? '';
     const isTeenTens = qKind === 'teen_tens' && Boolean(draft.teen_tens_options?.length);
     const isReceivedMissing = qKind === 'received_qty';
@@ -304,15 +311,31 @@ export function PendingReceiptCard({
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-[#a56a2a]">
               <HelpCircle className="w-3.5 h-3.5" />
-              {qKind ? qKind.replace(/_/g, ' ') : 'CLARIFY'}
+              {qKind ? qKind.replace(/_/g, ' ') : t.badgeClarify}
             </span>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="font-display text-[11px] font-semibold text-[#747878] hover:text-[#1b1c18] transition-colors"
-            >
-              {t.cancel}
-            </button>
+            <div className="flex items-center gap-2">
+              {onToggleMic && (
+                <button
+                  type="button"
+                  onClick={onToggleMic}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-display text-[10px] font-semibold transition-colors ${
+                    isListeningFollowUp
+                      ? 'bg-[#1c1b1b] text-[#c6f26a]'
+                      : 'bg-[#f5f3ed] text-[#1b1c18] border border-[#dedad1]'
+                  }`}
+                >
+                  {isListeningFollowUp ? <Square className="w-2.5 h-2.5 fill-current" /> : <Mic className="w-2.5 h-2.5 text-[#4b6700]" />}
+                  <span>{isListeningFollowUp ? t.listeningTapToStop.split('…')[0] : t.speakTab}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onCancel}
+                className="font-display text-[11px] font-semibold text-[#747878] hover:text-[#1b1c18] transition-colors"
+              >
+                {t.cancel}
+              </button>
+            </div>
           </div>
 
           {(localizedQuestion ?? parseResult.question) && (
@@ -604,7 +627,7 @@ export function PendingReceiptCard({
     if (flowState === 'NEEDS_CLARIFICATION') {
       return { label: t.badgeClarify, cls: 'bg-[#a56a2a]/15 text-[#a56a2a]' };
     }
-    if (flowState === 'AWAITING_CONFIRMATION') {
+    if (flowState === 'AWAITING_CONFIRMATION' || (flowState === 'LISTENING' && draft.awaiting_confirmation)) {
       return draft.was_corrected
         ? { label: t.badgeCorrected, cls: 'bg-[#c6f26a] text-[#141f00]' }
         : { label: t.badgeVerifySave, cls: 'bg-[#c6f26a] text-[#141f00]' };
@@ -616,12 +639,13 @@ export function PendingReceiptCard({
   })();
 
   const isClarifying =
-    flowState === 'NEEDS_CLARIFICATION' &&
-    parseResult &&
-    (parseResult.status === 'clarify' || parseResult.status === 'unknown');
+    (flowState === 'NEEDS_CLARIFICATION' || (flowState === 'LISTENING' && Boolean(draft.pending_question_kind))) &&
+    Boolean(parseResult) &&
+    (parseResult?.status === 'clarify' || parseResult?.status === 'unknown');
 
   const isAwaitingConfirm =
-    flowState === 'AWAITING_CONFIRMATION' && draft.awaiting_confirmation;
+    (flowState === 'AWAITING_CONFIRMATION' || (flowState === 'LISTENING' && draft.awaiting_confirmation)) &&
+    draft.awaiting_confirmation;
 
   const multiEntries =
     parseResult?.entries && parseResult.entries.length > 1 ? parseResult.entries : null;
@@ -920,7 +944,7 @@ export function PendingReceiptCard({
             </div>
           )}
 
-          {/* Screen 5 Primary CTA + Spoken Hint + 2-up Secondary Row */}
+          {/* Screen 5 Primary CTA + Inline Voice Reply Pill + 2-up Secondary Row */}
           {isAwaitingConfirm && !isEditing && (
             <div className="space-y-2.5 pt-1">
               <button
@@ -946,6 +970,30 @@ export function PendingReceiptCard({
                   </>
                 )}
               </button>
+
+              {onToggleMic && (
+                <button
+                  type="button"
+                  onClick={onToggleMic}
+                  className={`w-full py-2.5 px-3 rounded-xl font-display text-xs font-semibold flex items-center justify-center gap-2 transition-colors border ${
+                    isListeningFollowUp
+                      ? 'bg-[#1c1b1b] text-[#c6f26a] border-[#1c1b1b]'
+                      : 'bg-[#f5f3ed] text-[#1b1c18] border-[#dedad1] hover:border-[#1c1b1b]'
+                  }`}
+                >
+                  {isListeningFollowUp ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current shrink-0" />
+                      <span>{t.listeningReplyStopBtn}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-3.5 h-3.5 text-[#4b6700] shrink-0" />
+                      <span>{t.speakConfirmOrEditBtn}</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               <div className="flex items-center justify-center gap-1.5 text-center">
                 <AudioLines className="w-3.5 h-3.5 text-[#4b6700] shrink-0" />
