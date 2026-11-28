@@ -663,6 +663,14 @@ def _extract_numbers(text: str) -> List[int]:
             if not any(abs(pos - p) < len(word) for p, _ in results):
                 results.append((pos, value))
 
+    # Fallback for glued qty+unit tokens from STT (e.g. "1kg", "4kg", "2packets")
+    if not results:
+        for match in re.finditer(
+            r'\b(\d+)(?=(?:kg|kilo|kilos|g|gm|ml|l|pcs|packets?|packs?|bottles?|crates?|boxes?)\b)',
+            text,
+        ):
+            results.append((match.start(), int(match.group(1))))
+
     # Sort by position and return values
     results.sort(key=lambda x: x[0])
     return [v for _, v in results]
@@ -772,7 +780,7 @@ def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
 def _extract_unit(text: str) -> Optional[str]:
     """Extract the unit from text using the unit keyword dictionary."""
     for keyword, normalized in UNIT_KEYWORDS.items():
-        if re.search(r'\b' + re.escape(keyword) + r'\b', text):
+        if re.search(r'(?:\b|\d)' + re.escape(keyword) + r'\b', text):
             return normalized
     return None
 

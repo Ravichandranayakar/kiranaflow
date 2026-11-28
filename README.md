@@ -203,7 +203,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 37 passed in 0.43s
+# 38 passed in 0.36s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit
