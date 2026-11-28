@@ -1,8 +1,8 @@
 # 05 — Sequence Diagrams
 
-## 1. Voice / Text Parse & Clarification Loop (`POST /api/voice/parse`)
+## 1. Voice / Text Parse & Clarification Loop (`POST /api/voice/intake` & `/api/voice/parse`)
 
-Every spoken or typed turn passes through the same backend parser. The frontend sends `{ transcript, draft, lang, source }` and renders the returned `draft` verbatim without local parsing or merging.
+Mic recordings upload audio directly to `POST /api/voice/intake` (offline Whisper STT + parser in one hop), while typed text, test chips, and tapped clarification buttons use `POST /api/voice/parse`. Both echo the updated full `PendingDraft` without local merging.
 
 ```mermaid
 sequenceDiagram
@@ -15,9 +15,9 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     S->>UI: Taps Mic & says "14 milk packets"
-    Note over Hook: Stops 1.5s after last new speech
-    Hook->>Proxy: POST /api/voice/parse {transcript:"14 milk packets", draft:{}, lang:"en", source:"voice"}
-    Proxy->>API: Forward JSON payload
+    Note over Hook: Stops 1.0s after voice ends (Web Audio VAD)
+    Hook->>Proxy: POST /api/voice/intake (audio blob + draft_json + lang) or /api/voice/parse
+    Proxy->>API: Forward audio / JSON payload
     API->>DB: load_catalogue(db) -> 15 products + aliases
     DB-->>API: Catalogue list[dict]
     API->>Parser: parse_transcript("14 milk packets", EmptyDraft, catalogue, "en")
@@ -49,9 +49,9 @@ sequenceDiagram
 
 ---
 
-## 2. Delivery Confirmation, Atomic Update & Idempotency (`POST /api/deliveries/confirm`)
+## 2. Delivery Confirmation, Atomic Update & Idempotency (`POST /api/deliveries/confirm*`)
 
-Once the shopkeeper taps **Confirm & Save** or speaks `"Confirm"`, a UUID `idempotency_key` generated in the draft guarantees that accidental double-taps or network retries never double-increment inventory.
+Once the shopkeeper taps **Confirm & Save** or speaks `"Confirm"`, a UUID `idempotency_key` generated per entry guarantees that accidental double-taps or network retries never double-increment inventory (multi-item phrases use `POST /api/deliveries/confirm-batch` inside a single PostgreSQL transaction).
 
 ```mermaid
 sequenceDiagram

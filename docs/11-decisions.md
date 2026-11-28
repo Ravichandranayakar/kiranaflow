@@ -4,7 +4,7 @@
 
 - **Context:** Calling external LLM APIs for every utterance introduces API key setup friction, per-call latency, network failure modes, and non-deterministic hallucinated JSON fields during judge evaluation.
 - **Decision:** Implement the primary parsing engine cleanly in pure Python ([`backend/app/services/parser.py`](../backend/app/services/parser.py)) using multilingual alias dictionaries, number-word tables (EN/HI/KN), regex partitioning, and rule-based disambiguation, while keeping `LLM_API_KEY` strictly optional in [`backend/app/config.py`](../backend/app/config.py).
-- **Consequences:** Works out of the box with zero secrets via `docker compose up --build`, executes deterministically in sub-millisecond time, and runs 33 fast unit tests without network or database dependencies.
+- **Consequences:** Works out of the box with zero secrets via `docker compose up --build`, executes deterministically in sub-millisecond time, and runs 37 fast unit tests without network or database dependencies.
 
 ---
 
@@ -37,3 +37,11 @@
 - **Context:** Collapsing delivery quantities into one net stock integer erases accountability for leaking milk packets or torn flour bags that must be claimed back from suppliers.
 - **Decision:** Model `usable_stock` and `damaged_stock` as separate first-class columns on `products` (and record `received`, `damaged`, `usable_delta` on `stock_movements`), surfaced distinctly as **Usable** vs **Return** in [`StockView.tsx`](../frontend/src/components/StockView.tsx).
 - **Consequences:** Shopkeepers track sellable shelf balance accurately while keeping supplier return totals visible for settlement.
+
+---
+
+## ADR-006: Cross-Browser `MediaRecorder` + Offline `faster-whisper` (`base` INT8) Over Chrome Web Speech
+
+- **Context:** Browser `SpeechRecognition` (`webkitSpeechRecognition`) fails in Firefox, often blocks in Brave, and depends on proprietary external cloud endpoints that can break on offline/sandboxed machines.
+- **Decision:** Capture audio universally with `navigator.mediaDevices` + `MediaRecorder` and an adaptive `12.5 Hz` Web Audio VAD (`1.0s` post-speech silence stop), decode uploaded containers in memory via `PyAV`, and transcribe locally inside the FastAPI container using `faster-whisper` (`base`, `int8`, pre-cached in `/opt/hf_cache`).
+- **Consequences:** Voice capture runs identically across Chrome, Brave, Firefox, and Edge with zero external STT keys, zero per-call billing, and sub-2-second end-to-end latency.

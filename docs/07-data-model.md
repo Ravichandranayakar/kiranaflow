@@ -87,11 +87,11 @@ erDiagram
 
 ---
 
-## 3. Atomic Write & Pre-Seeded 15-SKU Catalogue
+## 3. Atomic Write, Catalogue Sync & Pre-Seeded 15-SKU Catalogue
 
-All inventory updates in [`backend/app/routes/delivery.py`](../backend/app/routes/delivery.py) execute atomic SQL expressions (`Product.usable_stock + usable_delta` and `Product.damaged_stock + entry.damaged`) inside a database transaction (`get_db()`).
+All inventory updates in [`backend/app/routes/delivery.py`](../backend/app/routes/delivery.py) execute atomic SQL expressions (`Product.usable_stock + usable_delta` and `Product.damaged_stock + entry.damaged`) inside a database transaction (`get_db()`). Additional manual `+`/`-` adjustments (`POST /api/stock/adjust`, logged with `source="manual"`) reject negative balances with HTTP `400`, and explicit custom SKUs can be added or removed via `/api/stock/products`.
 
-On first startup (`seed_catalogue()` in [`backend/app/services/seed.py`](../backend/app/services/seed.py)), 15 common Indian kirana SKUs and EN/HI/KN phonetic aliases are inserted idempotently:
+On startup (`seed_catalogue()` in [`backend/app/services/seed.py`](../backend/app/services/seed.py)), 15 common Indian kirana SKUs with realistic opening shelf stock (`initial_usable`) and EN/HI/KN phonetic aliases are synced idempotently—adding missing SKUs/aliases without overwriting existing stock balances (4 seeded SKUs intentionally start below `min_threshold` for immediate reorder testing):
 
 | Product | Category | Unit | Threshold | Sample Aliases (EN / HI / KN) |
 |---------|----------|------|-----------|-------------------------------|

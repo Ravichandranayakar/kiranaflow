@@ -74,7 +74,7 @@ flowchart TB
 - **Single startup command:** `docker compose up --build` initializes schema (`init_db()`), seeds 15 Indian grocery SKUs + multilingual aliases (`seed_catalogue()`), starts FastAPI, and serves the compiled SPA through Nginx.
 - **No host port 5432 collision:** `db` publishes `5432/tcp` only within the internal Compose network, preventing conflicts with local PostgreSQL installations.
 - **Configurable frontend port:** Defaults to `8080` and supports overrides such as `FRONTEND_PORT=8085` when port `8080` is occupied.
-- **Local Vite dev mode:** `frontend/vite.config.ts` listens on `:5173` and proxies `/api` to `http://localhost:8000` for rapid frontend iteration while backend + Postgres remain in Docker.
+- **Local Vite dev mode:** `frontend/vite.config.ts` listens on `:5173` and proxies `/api` to `http://127.0.0.1:8000` (with 60s proxy timeout) for rapid frontend iteration while backend + Postgres remain in Docker.
 
 ---
 
@@ -115,9 +115,9 @@ flowchart LR
 | App Entry & Lifespan | `backend/main.py` | Creates tables, runs idempotent seed, attaches CORS + routes, serves `/api/health` |
 | Config | `backend/app/config.py` | Loads `DATABASE_URL`, `CORS_ORIGINS`, `LLM_API_KEY`, `DEFAULT_LANGUAGE` |
 | ORM Models | `backend/app/models/db_models.py` | Defines `Product`, `ProductAlias`, and `StockMovement` |
-| API Schemas | `backend/app/models/schemas.py` | Pydantic v2 validation for `/api/voice/parse`, `/api/deliveries/confirm`, `/api/stock*` |
-| Deterministic Parser | `backend/app/services/parser.py` | Pure-Python extraction, self-correction, teen/tens & variant guards, slot filling |
-| Seed & Catalogue | `backend/app/services/seed.py`, `catalogue_service.py` | Pre-loads 15 SKUs with multilingual aliases into dicts consumed by `parser.py` |
-| Voice & Delivery Routes | `backend/app/routes/voice.py`, `delivery.py` | Request orchestration, idempotency checks, atomic SQL updates |
-| Frontend Flow Hook | `frontend/src/hooks/useDeliveryFlow.ts` | Finite state machine, `1.5s` new-speech silence timer, `4s` no-speech fallback, `isConfirmingRef` lock |
-| Speech Service | `frontend/src/services/speech.ts` | `SpeechRecognition` (`en-IN`/`hi-IN`/`kn-IN`), `speechSynthesis`, Web Audio start/success chimes |
+| API Schemas | `backend/app/models/schemas.py` | Pydantic v2 validation for `/api/voice/intake`, `/api/voice/parse`, `/api/deliveries/confirm*`, `/api/stock*` |
+| Deterministic Parser | `backend/app/services/parser.py` | Pure-Python single/multi-item extraction, self-correction, teen/tens & variant guards, slot filling |
+| Seed & Catalogue | `backend/app/services/seed.py`, `catalogue_service.py` | Idempotently seeds 15 SKUs + opening stock, syncs aliases, and loads catalogue with eager joins |
+| Voice & Delivery Routes | `backend/app/routes/voice.py`, `delivery.py` | Offline Whisper transcription, single-hop intake, idempotency checks, atomic SQL updates, manual adjustments & SKU CRUD |
+| Frontend Flow Hook | `frontend/src/hooks/useDeliveryFlow.ts` | Finite state machine, `1.0s` post-speech VAD timer (`12.5 Hz`), `7s` no-voice cutoff, `isConfirmingRef` lock |
+| Speech Service | `frontend/src/services/speech.ts` | Cross-browser `MediaRecorder` (`pickRecordingFormat`), `speechSynthesis`, Web Audio start/success chimes |

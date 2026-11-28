@@ -115,7 +115,8 @@ flowchart TD
     PendingQ -->|Yes| MergeClar["_merge_clarification()\nvariant / teen_tens / damaged_qty / unknown_sku"]
     MergeClar --> TryComplete
 
-    PendingQ -->|No| Step1["Slice numbers after correction marker\nMatch aliases across full phrase"]
+    PendingQ -->|No| MultiSplit["Split multi-item clauses\n('and' / 'aur' / 'mattu')"]
+    MultiSplit --> Step1["Slice numbers after correction marker\nMatch aliases across full phrase"]
     Step1 --> MatchCount{"Alias matches?"}
 
     MatchCount -->|"> 1 candidate"| RetVariant(["status = clarify (variant)"])
@@ -192,6 +193,8 @@ docker compose up --build
 | `POST` | `/api/deliveries/confirm` | Atomically commit confirmed entry and enforce `idempotency_key` |
 | `POST` | `/api/deliveries/confirm-batch` | Atomically commit multi-item delivery entries in one transaction |
 | `POST` | `/api/stock/adjust` | Manually add/subtract `usable_stock` or `damaged_stock` with audit log |
+| `POST` | `/api/stock/products` | Explicitly add a custom SKU and spoken aliases to the catalogue |
+| `DELETE` | `/api/stock/products/{product_id}` | Remove a SKU and its aliases/history from the catalogue |
 | `GET` | `/api/stock` | Return current `usable_stock`, `damaged_stock`, and `is_low` status |
 | `GET` | `/api/stock/movements` | Return immutable chronological delivery audit log |
 
@@ -204,7 +207,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 37 passed in 0.43s
+# 37 passed in 0.33s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit
@@ -225,8 +228,8 @@ Full verification results and PostgreSQL idempotency evidence are documented in 
 | [05 — Voice & Commit Sequences](docs/05-sequences.md) | Multi-turn `/api/voice/parse` loop & atomic `/api/deliveries/confirm` |
 | [06 — State Machine & Speech Parser](docs/06-activity-state-machine.md) | Delivery state machine, `parser.py` decision tree, and EN/HI/KN dictionaries |
 | [07 — Data Model](docs/07-data-model.md) | PostgreSQL ER diagram (`db_models.py`) & 15-SKU seed catalogue |
-| [08 — API Reference](docs/08-api-reference.md) | Verified live JSON payloads for all 5 endpoints |
-| [09 — Test Plan & Results](docs/09-test-plan-and-results.md) | `33 passed` pytest evidence, TypeScript check & idempotency proof |
+| [08 — API Reference](docs/08-api-reference.md) | Verified live JSON payloads for all REST endpoints |
+| [09 — Test Plan & Results](docs/09-test-plan-and-results.md) | `37 passed` pytest evidence, TypeScript check & idempotency proof |
 | [10 — User Guide](docs/10-user-guide.md) | Shopkeeper workflow, language switcher, mic/text modes & settings |
 | [11 — Architecture Decisions (ADRs)](docs/11-decisions.md) | 5 key engineering trade-offs & implementation proofs |
 
@@ -245,7 +248,7 @@ kiranaflow/
 │   ├── requirements.txt
 │   ├── main.py                   # FastAPI entrypoint & idempotent startup seeding
 │   ├── tests/
-│   │   └── test_parser.py        # 33 standalone parser unit tests
+│   │   └── test_parser.py        # 37 standalone parser unit tests
 │   └── app/
 │       ├── config.py             # Environment settings
 │       ├── db.py                 # SQLAlchemy engine, session & health check
@@ -253,8 +256,8 @@ kiranaflow/
 │       │   ├── db_models.py      # Product, ProductAlias, StockMovement
 │       │   └── schemas.py        # Pydantic v2 API contracts
 │       ├── routes/
-│       │   ├── voice.py          # POST /api/voice/transcribe & /api/voice/parse
-│       │   └── delivery.py       # POST /api/deliveries/confirm*, /api/stock*
+│       │   ├── voice.py          # POST /api/voice/intake, /transcribe & /parse
+│       │   └── delivery.py       # POST /api/deliveries/confirm*, /api/stock* (adjust, products)
 │       └── services/
 │           ├── seed.py           # 15 pre-seeded Indian grocery SKUs + EN/HI/KN aliases
 │           ├── stt.py            # Offline faster-whisper transcription

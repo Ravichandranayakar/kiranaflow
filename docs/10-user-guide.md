@@ -24,7 +24,7 @@
    - `"10 cheeni 2 kharab"`
    - `"10 fortune oil illa illa 12 packets 1 leaky"`
    - `"1 kg onion and 4 kg daal"`
-3. **Automatic end detection:** Pause for `1.5 seconds` after finishing your sentence—KiranaFlow automatically stops recording and sends audio to `/api/voice/transcribe` (offline Whisper) → `/api/voice/parse`, or tap the square stop hub manually anytime.
+3. **Automatic end detection:** Pause for `1.0 second` after finishing your sentence—KiranaFlow automatically stops recording and sends audio in one step to `/api/voice/intake` (offline Whisper transcription + deterministic parsing), or tap the square stop hub manually anytime.
 
 ### Using Text Fallback or Test Case Chips
 
@@ -48,10 +48,11 @@ When ready, the card highlights `+usable` units in lime green and speaks a local
 
 ---
 
-## 3. Tab 2 — `Stock` (Shelf Balance & Reorders)
+## 3. Tab 2 — `Stock` (Shelf Balance, Adjustments & Reorders)
 
 - Filter inventory with **All**, **Low**, or **Damaged**.
 - Each SKU card displays sellable **Usable** quantity alongside **Return** (`damaged_stock`) kept separate for distributor claims.
+- Use **Adjust (`+/-`)** on any card for manual opening-stock edits or wastage/sales deductions (guarded against negative stock), **Add Item** to explicitly create a new product with spoken aliases, or the trash action to remove unused SKUs.
 - Items below `min_threshold` show an amber `Low (<N)` badge.
 - Tap **Copy WhatsApp Reorder Draft** to copy a ready-to-send supplier list (`Namaste, please send stock for: ...`) to your clipboard—KiranaFlow never dispatches orders automatically.
 

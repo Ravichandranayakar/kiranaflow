@@ -5,16 +5,16 @@
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE
-    IDLE --> LISTENING: Tap Mic (SpeechRecognition starts)
+    IDLE --> LISTENING: Tap Mic (MediaRecorder + Web Audio VAD starts)
     IDLE --> PROCESSING: Submit text / Tap Test Case chip
 
-    LISTENING --> PROCESSING: 1.5s silence after new speech OR tap stop (spoken text non-empty)
-    LISTENING --> IDLE: Empty speech / 4s no-audio / Error (shows text box)
-    LISTENING --> AWAITING_CONFIRMATION: Empty speech while draft awaiting confirmation
+    LISTENING --> PROCESSING: 1.0s post-speech silence OR tap stop (audio captured)
+    LISTENING --> IDLE: Empty/too-small audio / 7s no-voice / Error (shows text box)
+    LISTENING --> AWAITING_CONFIRMATION: Empty audio while draft awaiting confirmation
 
     PROCESSING --> NEEDS_CLARIFICATION: status = "clarify" or "unknown"
     PROCESSING --> AWAITING_CONFIRMATION: status = "complete" (action = "none")
-    PROCESSING --> COMMITTED: action = "confirm" -> confirmDelivery() succeeds
+    PROCESSING --> COMMITTED: action = "confirm" -> confirmDelivery() / Batch succeeds
     PROCESSING --> IDLE: action = "cancel"
     PROCESSING --> ERROR: status = "error" or API failure
 
