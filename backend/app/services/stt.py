@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import threading
 from typing import Optional
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _model_lock = threading.Lock()
 _whisper_model: Optional[WhisperModel] = None
+_CPU_THREADS = min(4, os.cpu_count() or 2)
 
 # Bias Whisper decoding toward KiranaFlow's multilingual Indian grocery vocabulary
 # while keeping Romanized transcription compatible with parser.py aliases.
@@ -40,16 +42,22 @@ def get_whisper_model() -> WhisperModel:
     if _whisper_model is None:
         with _model_lock:
             if _whisper_model is None:
-                logger.info("Loading offline Whisper 'base' (int8) STT model...")
+                logger.info("Loading offline Whisper 'base' (int8, %d threads) STT model...", _CPU_THREADS)
                 try:
                     _whisper_model = WhisperModel(
                         "base",
                         device="cpu",
                         compute_type="int8",
+                        cpu_threads=_CPU_THREADS,
                         local_files_only=True,
                     )
                 except Exception:
-                    _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+                    _whisper_model = WhisperModel(
+                        "base",
+                        device="cpu",
+                        compute_type="int8",
+                        cpu_threads=_CPU_THREADS,
+                    )
                 logger.info("Whisper STT model ready.")
     return _whisper_model
 
@@ -88,8 +96,11 @@ def transcribe_audio_bytes(audio_bytes: bytes, suffix: str = ".webm") -> str:
         language="en",
         initial_prompt=KIRANA_PROMPT,
         vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 400},
-        beam_size=2,
+        vad_parameters={"min_silence_duration_ms": 250},
+        beam_size=1,
+        best_of=1,
+        condition_on_previous_text=False,
+        without_timestamps=True,
     )
     parts = [seg.text.strip() for seg in segments if seg.text and seg.text.strip()]
     return " ".join(parts).strip()

@@ -12,18 +12,34 @@ POST /api/voice/parse
 
 from __future__ import annotations
 
+import json
 import os
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Literal
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models.schemas import ParseRequest, ParseResponse
+from app.models.schemas import ParseRequest, ParseResponse, PendingDraft
 from app.services.catalogue_service import load_catalogue
 from app.services.parser import parse_transcript
 from app.services.stt import transcribe_audio_bytes
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+
+
+def _infer_audio_ext(audio: UploadFile) -> str:
+    _, ext = os.path.splitext(audio.filename or "")
+    if ext:
+        return ext
+    ctype = (audio.content_type or "").lower()
+    if "ogg" in ctype:
+        return ".ogg"
+    if "mp4" in ctype or "aac" in ctype:
+        return ".mp4"
+    if "wav" in ctype:
+        return ".wav"
+    return ".webm"
 
 
 class TranscribeResponse(BaseModel):
@@ -37,24 +53,61 @@ async def transcribe_voice_audio(audio: UploadFile = File(...)) -> TranscribeRes
     if len(data) < 200:
         return TranscribeResponse(transcript="")
 
-    _, ext = os.path.splitext(audio.filename or "")
-    if not ext:
-        ctype = (audio.content_type or "").lower()
-        if "ogg" in ctype:
-            ext = ".ogg"
-        elif "mp4" in ctype or "aac" in ctype:
-            ext = ".mp4"
-        elif "wav" in ctype:
-            ext = ".wav"
-        else:
-            ext = ".webm"
-
     try:
-        transcript = transcribe_audio_bytes(data, suffix=ext)
+        transcript = transcribe_audio_bytes(data, suffix=_infer_audio_ext(audio))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Audio transcription failed: {exc}") from exc
 
     return TranscribeResponse(transcript=transcript)
+
+
+@router.post("/intake", response_model=ParseResponse)
+async def voice_intake_one_hop(
+    audio: UploadFile = File(...),
+    draft_json: str = Form("{}"),
+    lang: Literal["en", "hi", "kn"] = Form("en"),
+    db: Session = Depends(get_db),
+) -> ParseResponse:
+    """Single-round-trip endpoint: transcribe browser audio and parse against catalogue."""
+    data = await audio.read()
+    try:
+        draft = PendingDraft.model_validate(json.loads(draft_json or "{}"))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid draft payload: {exc}") from exc
+
+    if len(data) < 200:
+        return ParseResponse(
+            status="error",
+            question="No audio captured — please speak clearly or type below.",
+            question_kind="noise",
+            draft=draft,
+            raw_transcript="",
+        )
+
+    try:
+        transcript = transcribe_audio_bytes(data, suffix=_infer_audio_ext(audio))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Audio transcription failed: {exc}") from exc
+
+    if not transcript.strip():
+        return ParseResponse(
+            status="error",
+            question="Could not hear words clearly — tap mic to try again or type below.",
+            question_kind="noise",
+            draft=draft,
+            raw_transcript="",
+        )
+
+    catalogue = load_catalogue(db)
+    response = parse_transcript(
+        transcript=transcript,
+        draft=draft,
+        catalogue=catalogue,
+        lang=lang,
+    )
+    if response.raw_transcript is None:
+        response.raw_transcript = transcript
+    return response
 
 
 @router.post("/parse", response_model=ParseResponse)

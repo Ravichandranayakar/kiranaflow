@@ -25,7 +25,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.models.db_models import Product, StockMovement
@@ -258,30 +258,27 @@ def get_stock_movements(
     limit: int = 50,
     db: Session = Depends(get_db),
 ) -> List[MovementRecord]:
-    """Return recent stock movement history (audit log)."""
+    """Return recent stock movement history (audit log) in a single JOIN query."""
     movements = (
         db.query(StockMovement)
+        .options(joinedload(StockMovement.product))
         .order_by(StockMovement.confirmed_at.desc())
         .limit(limit)
         .all()
     )
 
-    records = []
-    for m in movements:
-        product = db.query(Product).filter(Product.id == m.product_id).first()
-        records.append(
-            MovementRecord(
-                id=m.id,
-                product_name=product.name if product else f"Product #{m.product_id}",
-                received=m.received,
-                damaged=m.damaged,
-                usable_delta=m.usable_delta,
-                raw_transcript=m.raw_transcript,
-                lang=m.lang,
-                source=m.source,
-                was_corrected=m.was_corrected,
-                confirmed_at=m.confirmed_at.isoformat(),
-            )
+    return [
+        MovementRecord(
+            id=m.id,
+            product_name=m.product.name if m.product else f"Product #{m.product_id}",
+            received=m.received,
+            damaged=m.damaged,
+            usable_delta=m.usable_delta,
+            raw_transcript=m.raw_transcript,
+            lang=m.lang,
+            source=m.source,
+            was_corrected=m.was_corrected,
+            confirmed_at=m.confirmed_at.isoformat(),
         )
-
-    return records
+        for m in movements
+    ]

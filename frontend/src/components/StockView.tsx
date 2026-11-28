@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Copy, Package, SlidersHorizontal, X } from 'lucide-react';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { LangCode, StockItem } from '../types/api';
+
+const QUICK_ADJUST_STEPS = [-5, -1, 1, 5, 10, 20];
 
 interface StockViewProps {
   items: StockItem[];
@@ -17,7 +19,7 @@ interface StockViewProps {
 
 type FilterMode = 'all' | 'low' | 'damaged';
 
-export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockViewProps) {
+export const StockView = memo(function StockView({ items, lowStockCount, lang, onAdjustStock }: StockViewProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [copied, setCopied] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -26,6 +28,18 @@ export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockVi
   const [reason, setReason] = useState<string>('Opening / manual stock update');
   const [savingAdjust, setSavingAdjust] = useState<boolean>(false);
   const t = TRANSLATIONS[lang];
+
+  const lowItems = useMemo(() => items.filter((i) => i.is_low), [items]);
+  const damagedCount = useMemo(() => items.filter((i) => i.damaged_stock > 0).length, [items]);
+  const filtered = useMemo(
+    () =>
+      items.filter((item) => {
+        if (filter === 'low') return item.is_low;
+        if (filter === 'damaged') return item.damaged_stock > 0;
+        return true;
+      }),
+    [filter, items],
+  );
 
   const openAdjust = (item: StockItem) => {
     if (editingId === item.product_id) {
@@ -55,9 +69,6 @@ export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockVi
     }
   };
 
-  const lowItems = items.filter((i) => i.is_low);
-  const damagedCount = items.filter((i) => i.damaged_stock > 0).length;
-
   const handleCopyReorder = async () => {
     if (lowItems.length === 0) return;
     const lines = [
@@ -72,12 +83,6 @@ export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockVi
       // Clipboard unavailable in non-HTTPS contexts
     }
   };
-
-  const filtered = items.filter((item) => {
-    if (filter === 'low') return item.is_low;
-    if (filter === 'damaged') return item.damaged_stock > 0;
-    return true;
-  });
 
   return (
     <section className="px-5 py-4 space-y-4 pb-24">
@@ -231,7 +236,7 @@ export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockVi
                 {isEditing && (
                   <div className="bg-[#fbf9f3] border border-[#eae8e2] rounded-xl p-3 space-y-2.5">
                     <div className="flex flex-wrap gap-1.5">
-                      {[-5, -1, 1, 5, 10, 20].map((step) => (
+                      {QUICK_ADJUST_STEPS.map((step) => (
                         <button
                           key={step}
                           type="button"
@@ -312,4 +317,4 @@ export function StockView({ items, lowStockCount, lang, onAdjustStock }: StockVi
       </div>
     </section>
   );
-}
+});

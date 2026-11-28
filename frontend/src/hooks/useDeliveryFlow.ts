@@ -17,8 +17,8 @@ import {
   fetchHealth,
   fetchMovements,
   fetchStock,
+  intakeVoice,
   parseVoice,
-  transcribeVoice,
 } from '../services/api';
 import {
   isSpeechRecognitionSupported,
@@ -191,6 +191,57 @@ export function useDeliveryFlow() {
     [isMuted, refreshData, showToast],
   );
 
+  const applyParseResponse = useCallback(
+    async (res: ParseResponse, cleaned: string, source: InputSource) => {
+      if (res.raw_transcript) {
+        setTranscript(res.raw_transcript);
+      }
+      setDraft(res.draft);
+      setParseResult(res);
+
+      // Spoken confirm/cancel only accepted when backend detects it during awaiting_confirmation
+      if (res.action === 'confirm' && res.entry) {
+        const toCommit =
+          res.entries && res.entries.length > 0 ? res.entries : [res.entry];
+        await commitEntries(toCommit, cleaned, source, res.draft.was_corrected);
+        return;
+      }
+
+      if (res.action === 'cancel') {
+        stopSpeaking();
+        setDraft(EMPTY_DRAFT);
+        setParseResult(null);
+        setFlowState('IDLE');
+        showToast('warning', 'Pending delivery cancelled.');
+        return;
+      }
+
+      if (res.status === 'complete' && res.draft.awaiting_confirmation) {
+        setFlowState('AWAITING_CONFIRMATION');
+        if (res.readback_text) {
+          speakText(res.readback_text, langRef.current, isMuted);
+        }
+      } else if (res.status === 'clarify' || res.status === 'unknown') {
+        setFlowState('NEEDS_CLARIFICATION');
+        if (res.question) {
+          speakText(res.question, langRef.current, isMuted);
+        }
+      } else if (res.status === 'error') {
+        if (res.question_kind === 'noise' && !res.raw_transcript) {
+          setMicError(res.question ?? 'Could not hear words clearly — try again or type below.');
+          setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+        } else {
+          setFlowState('ERROR');
+          if (res.question) {
+            speakText(res.question, langRef.current, isMuted);
+            showToast('warning', res.question);
+          }
+        }
+      }
+    },
+    [commitEntries, isMuted, showToast],
+  );
+
   const submitTranscript = useCallback(
     async (rawText: string, source: InputSource = 'text') => {
       const cleaned = rawText.trim();
@@ -210,51 +261,14 @@ export function useDeliveryFlow() {
           lang: langRef.current,
           source,
         });
-
-        setDraft(res.draft);
-        setParseResult(res);
-
-        // Spoken confirm/cancel only accepted when backend detects it during awaiting_confirmation
-        if (res.action === 'confirm' && res.entry) {
-          const toCommit =
-            res.entries && res.entries.length > 0 ? res.entries : [res.entry];
-          await commitEntries(toCommit, cleaned, source, res.draft.was_corrected);
-          return;
-        }
-
-        if (res.action === 'cancel') {
-          stopSpeaking();
-          setDraft(EMPTY_DRAFT);
-          setParseResult(null);
-          setFlowState('IDLE');
-          showToast('warning', 'Pending delivery cancelled.');
-          return;
-        }
-
-        if (res.status === 'complete' && res.draft.awaiting_confirmation) {
-          setFlowState('AWAITING_CONFIRMATION');
-          if (res.readback_text) {
-            speakText(res.readback_text, langRef.current, isMuted);
-          }
-        } else if (res.status === 'clarify' || res.status === 'unknown') {
-          setFlowState('NEEDS_CLARIFICATION');
-          if (res.question) {
-            speakText(res.question, langRef.current, isMuted);
-          }
-        } else if (res.status === 'error') {
-          setFlowState('ERROR');
-          if (res.question) {
-            speakText(res.question, langRef.current, isMuted);
-            showToast('warning', res.question);
-          }
-        }
+        await applyParseResponse(res, cleaned, source);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to reach KiranaFlow backend';
         setFlowState('ERROR');
         showToast('error', msg);
       }
     },
-    [commitEntries, isMuted, showToast],
+    [applyParseResponse, showToast],
   );
 
   const confirmCurrentDraft = useCallback(async () => {
@@ -427,7 +441,7 @@ export function useDeliveryFlow() {
     let stopped = false;
     let silenceTimer: number | null = null;
     let noVoiceTimer: number | null = null;
-    let rafId = 0;
+    let monitorInterval: number | null = null;
     let audioCtx: AudioContext | null = null;
 
     const releaseHardware = () => {
@@ -439,9 +453,9 @@ export function useDeliveryFlow() {
         window.clearTimeout(noVoiceTimer);
         noVoiceTimer = null;
       }
-      if (rafId) {
-        window.cancelAnimationFrame(rafId);
-        rafId = 0;
+      if (monitorInterval !== null) {
+        window.clearInterval(monitorInterval);
+        monitorInterval = null;
       }
       stream.getTracks().forEach((track) => track.stop());
       if (audioCtx && audioCtx.state !== 'closed') {
@@ -501,16 +515,13 @@ export function useDeliveryFlow() {
       }
 
       setFlowState('PROCESSING');
-      setTranscript('Transcribing your voice…');
+      setLastCommitted(null);
+      setLastSource('voice');
+      setTranscript('Listening done — checking words…');
       try {
-        const { transcript: recognized } = await transcribeVoice(blob, filename);
-        const cleaned = recognized.trim();
-        if (cleaned) {
-          await submitTranscript(cleaned, 'voice');
-        } else {
-          setMicError('Could not catch words clearly — tap mic and speak clearly, or type below.');
-          setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
-        }
+        const res = await intakeVoice(blob, filename, draftRef.current, langRef.current);
+        const textUsed = (res.raw_transcript || '').trim();
+        await applyParseResponse(res, textUsed, 'voice');
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to transcribe audio';
         setMicError(`${msg} — tap mic to retry or type below.`);
@@ -518,7 +529,7 @@ export function useDeliveryFlow() {
       }
     };
 
-    // Set up Web Audio VAD for automatic 1.5s post-speech silence stop across all browsers
+    // Adaptive 12.5 Hz Web Audio VAD with 1.0s post-speech silence auto-stop (zero 60Hz re-renders)
     const AudioCtx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -536,7 +547,7 @@ export function useDeliveryFlow() {
         let baselineCount = 0;
         let speechHeard = false;
 
-        const monitorLevel = () => {
+        monitorInterval = window.setInterval(() => {
           if (stopped) return;
           analyser.getByteTimeDomainData(data);
           let maxDev = 0;
@@ -546,18 +557,20 @@ export function useDeliveryFlow() {
           }
 
           const elapsed = Date.now() - startMs;
-          if (elapsed < 300) {
+          if (elapsed < 200) {
             baselineSum += maxDev;
             baselineCount += 1;
           } else {
             const noiseFloor = baselineCount > 0 ? baselineSum / baselineCount : 4;
             const threshold = Math.max(8, Math.min(28, noiseFloor * 2.1));
             if (maxDev > threshold) {
-              speechHeard = true;
-              setInterimTranscript('Hearing voice — pause 1.5s or tap stop when done');
-              if (noVoiceTimer !== null) {
-                window.clearTimeout(noVoiceTimer);
-                noVoiceTimer = null;
+              if (!speechHeard) {
+                speechHeard = true;
+                setInterimTranscript('Hearing voice — pause 1s or tap stop when done');
+                if (noVoiceTimer !== null) {
+                  window.clearTimeout(noVoiceTimer);
+                  noVoiceTimer = null;
+                }
               }
               if (silenceTimer !== null) {
                 window.clearTimeout(silenceTimer);
@@ -566,20 +579,17 @@ export function useDeliveryFlow() {
                 if (!stopped && speechHeard) {
                   stopSession(false);
                 }
-              }, 1500);
+              }, 1000);
             }
           }
-          rafId = window.requestAnimationFrame(monitorLevel);
-        };
-
-        rafId = window.requestAnimationFrame(monitorLevel);
+        }, 80);
 
         noVoiceTimer = window.setTimeout(() => {
           if (!stopped && !speechHeard) {
             setMicError('No voice detected — tap mic and speak, or type below.');
             stopSession(true);
           }
-        }, 8000);
+        }, 7000);
       } catch {
         // If AudioContext fails, user can still stop manually with one tap
       }
@@ -597,7 +607,7 @@ export function useDeliveryFlow() {
       setMicError('Could not start audio recorder — use text input below.');
       setFlowState('IDLE');
     }
-  }, [flowState, micSupported, restoreNonListeningState, submitTranscript]);
+  }, [applyParseResponse, flowState, micSupported, restoreNonListeningState]);
 
   return {
     lang,

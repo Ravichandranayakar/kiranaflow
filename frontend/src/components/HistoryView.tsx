@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Clock } from 'lucide-react';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { LangCode, MovementRecord } from '../types/api';
@@ -7,7 +8,7 @@ interface HistoryViewProps {
   lang: LangCode;
 }
 
-export function HistoryView({ movements, lang }: HistoryViewProps) {
+export const HistoryView = memo(function HistoryView({ movements, lang }: HistoryViewProps) {
   const t = TRANSLATIONS[lang];
 
   return (
@@ -89,4 +90,4 @@ export function HistoryView({ movements, lang }: HistoryViewProps) {
       )}
     </section>
   );
-}
+});

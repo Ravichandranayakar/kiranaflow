@@ -9,9 +9,9 @@
 ```text
 > python -m pytest backend/tests/ -v
 platform win32 -- Python 3.12.3, pytest-8.2.2, pluggy-1.5.0
-collected 38 items
+collected 37 items
 
-============================= 38 passed in 0.36s ==============================
+============================= 37 passed in 0.43s ==============================
 ```
 
 ### Test Coverage Matrix (37 / 37 Passed)

@@ -76,6 +76,36 @@ export async function transcribeVoice(audioBlob: Blob, filename: string): Promis
   return (await response.json()) as { transcript: string };
 }
 
+export async function intakeVoice(
+  audioBlob: Blob,
+  filename: string,
+  draft: ParseRequest['draft'],
+  lang: ParseRequest['lang'],
+): Promise<ParseResponse> {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, filename);
+  formData.append('draft_json', JSON.stringify(draft));
+  formData.append('lang', lang);
+
+  const response = await fetch(`${BASE_URL}/api/voice/intake`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Voice intake failed (${response.status})`;
+    try {
+      const errBody = (await response.json()) as { detail?: string };
+      if (errBody.detail) detail = errBody.detail;
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(detail);
+  }
+
+  return (await response.json()) as ParseResponse;
+}
+
 export function confirmDelivery(payload: ConfirmRequest): Promise<ConfirmResponse> {
   return requestJson<ConfirmResponse>('/api/deliveries/confirm', {
     method: 'POST',

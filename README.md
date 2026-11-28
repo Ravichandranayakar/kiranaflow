@@ -153,7 +153,7 @@ docker compose up --build
 | **Health Check** | [http://localhost:8080/api/health](http://localhost:8080/api/health) | Verifies live `SELECT 1` DB connection and active parser mode |
 | **Local Vite Dev** | [http://localhost:5173](http://localhost:5173) | Optional dev mode via `cd frontend && npm install && npm run dev` |
 
-> **Universal Voice & Offline Fallback:** Voice capture uses standard browser `MediaRecorder` + adaptive `1.5s` silence detection paired with an offline `faster-whisper` backend endpoint (`/api/voice/transcribe`), so the mic works across **Chrome, Brave, Firefox, and Edge** with zero external API keys. Every flow also works via **Or type instead** and the 6 one-tap **Try a test case** chips.
+> **Universal Voice & Offline Fallback:** Voice capture uses standard browser `MediaRecorder` + adaptive `1.0s` silence detection paired with single-round-trip offline `faster-whisper` transcription (`/api/voice/intake`), so the mic works across **Chrome, Brave, Firefox, and Edge** with zero external API keys. Every flow also works via **Or type instead** and the 6 one-tap **Try a test case** chips.
 
 ---
 
@@ -186,6 +186,7 @@ docker compose up --build
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | `GET` | `/api/health` | PostgreSQL connectivity check (`SELECT 1`) and parser status |
+| `POST` | `/api/voice/intake` | Single-hop transcribe + parse for browser audio uploads |
 | `POST` | `/api/voice/transcribe` | Transcribe cross-browser `MediaRecorder` audio via offline Whisper |
 | `POST` | `/api/voice/parse` | Parse single- or multi-item utterance against 15 seeded SKUs |
 | `POST` | `/api/deliveries/confirm` | Atomically commit confirmed entry and enforce `idempotency_key` |
@@ -203,7 +204,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 38 passed in 0.36s
+# 37 passed in 0.43s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit

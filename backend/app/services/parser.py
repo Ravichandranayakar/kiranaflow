@@ -121,10 +121,24 @@ TEEN_TENS_PAIRS = {
 MULTI_SPLIT_RE = re.compile(
     r"(?:,|&|\+|(?:\band\b)|(?:\baur\b)|(?:\bmattu\b)|(?:\bplus\b))"
 )
+_DIGIT_RE = re.compile(r"\b(\d+)\b")
+_PUNCT_RE = re.compile(r"[^\w\s-]")
+_CORRECTION_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(m) for m in sorted(CORRECTION_MARKERS, key=len, reverse=True)) + r")\b"
+)
+_NUMBER_WORD_RE = re.compile(
+    r"\b(" + "|".join(re.escape(w) for w in sorted(ALL_NUMBERS.keys(), key=len, reverse=True)) + r")\b"
+)
+_DAMAGE_KW_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(k) for k in sorted(DAMAGE_KEYWORDS, key=len, reverse=True)) + r")\b"
+)
+_UNIT_KW_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(UNIT_KEYWORDS.keys(), key=len, reverse=True)) + r")\b"
+)
 
 
 def _has_correction_marker(text_lower: str) -> bool:
-    return any(re.search(r"\b" + re.escape(m) + r"\b", text_lower) for m in CORRECTION_MARKERS)
+    return bool(_CORRECTION_RE.search(text_lower))
 
 
 def _split_multi_clauses(text_lower: str, catalogue: List[Dict]) -> Optional[List[str]]:
@@ -524,7 +538,7 @@ def _merge_clarification(
 
 def _tokenize_words(text: str) -> set:
     """Split text into lowercase words while ignoring trailing punctuation such as '.' or ','."""
-    return set(re.sub(r"[^\w\s-]", " ", text.lower()).split())
+    return set(_PUNCT_RE.sub(" ", text.lower()).split())
 
 
 def _handle_confirmation_turn(
@@ -623,55 +637,31 @@ def _apply_self_corrections(text: str) -> str:
     """
     Handle mid-sentence self-corrections.
     "10 oil packets illa illa 12 packets 1 leaky" → keeps text after last correction marker.
-    But we keep the FULL text so product matching still works; we only reset
-    number extraction to after the last correction marker.
     """
-    # Find the last correction marker position
-    last_correction_pos = -1
-    for marker in sorted(CORRECTION_MARKERS, key=len, reverse=True):
-        idx = text.rfind(marker)
-        if idx > last_correction_pos:
-            last_correction_pos = idx + len(marker)
-
-    if last_correction_pos > 0:
-        # Return text from after the last correction marker
-        corrected = text[last_correction_pos:].strip()
+    matches = list(_CORRECTION_RE.finditer(text))
+    if matches:
+        corrected = text[matches[-1].end():].strip()
         if corrected:
             return corrected
-
     return text
 
 
 def _extract_numbers(text: str) -> List[int]:
     """
     Extract all numbers from text, checking both digit patterns and
-    number-word dictionaries (EN/HI/KN).
-    Returns list of ints in order of appearance.
+    precompiled EN/HI/KN number-word patterns in order of appearance.
     """
     results: List[Tuple[int, int]] = []  # (position, value)
 
-    # Digit patterns (including "24", "3", etc.)
-    for match in re.finditer(r'\b(\d+)\b', text):
+    for match in _DIGIT_RE.finditer(text):
         results.append((match.start(), int(match.group(1))))
 
-    # Number words — check longer phrases first
-    for word, value in sorted(ALL_NUMBERS.items(), key=lambda x: -len(x[0])):
-        pattern = r'\b' + re.escape(word) + r'\b'
-        for match in re.finditer(pattern, text):
-            # Avoid overlapping with already-found numbers
-            pos = match.start()
-            if not any(abs(pos - p) < len(word) for p, _ in results):
-                results.append((pos, value))
+    for match in _NUMBER_WORD_RE.finditer(text):
+        word = match.group(1)
+        pos = match.start()
+        if not any(abs(pos - p) < len(word) for p, _ in results):
+            results.append((pos, ALL_NUMBERS[word]))
 
-    # Fallback for glued qty+unit tokens from STT (e.g. "1kg", "4kg", "2packets")
-    if not results:
-        for match in re.finditer(
-            r'\b(\d+)(?=(?:kg|kilo|kilos|g|gm|ml|l|pcs|packets?|packs?|bottles?|crates?|boxes?)\b)',
-            text,
-        ):
-            results.append((match.start(), int(match.group(1))))
-
-    # Sort by position and return values
     results.sort(key=lambda x: x[0])
     return [v for _, v in results]
 
@@ -681,41 +671,25 @@ def _partition_damage(
 ) -> Tuple[bool, List[int], List[int]]:
     """
     Determine which numbers refer to damaged items vs received.
-
-    Strategy: find damage keywords, then the number CLOSEST to (and preferably
-    after) each keyword is the damage count. All other numbers are received.
-    If a damage keyword exists but no number is nearby, return has_damage=True
-    with empty damage_numbers so the caller can ask.
     """
-    has_damage = False
-    damage_keyword_positions: List[int] = []
-
-    for keyword in DAMAGE_KEYWORDS:
-        for match in re.finditer(r'\b' + re.escape(keyword) + r'\b', text):
-            has_damage = True
-            damage_keyword_positions.append(match.start())
-
-    if not has_damage:
+    damage_keyword_positions = [m.start() for m in _DAMAGE_KW_RE.finditer(text)]
+    if not damage_keyword_positions:
         return False, [], numbers
 
     if not numbers:
         return True, [], []
 
-    # Find all digit match positions with their values
-    digit_matches: List[Tuple[int, int]] = []  # (position, value)
-    for match in re.finditer(r'\b(\d+)\b', text):
-        digit_matches.append((match.start(), int(match.group(1))))
-
+    digit_matches: List[Tuple[int, int]] = [
+        (m.start(), int(m.group(1))) for m in _DIGIT_RE.finditer(text)
+    ]
     if not digit_matches:
         return True, [], []
 
-    # For each damage keyword, find the closest number (prefer the one
-    # immediately before or after, within 20 chars)
     damage_match_positions: set = set()
     for kw_pos in damage_keyword_positions:
         best_dist = float('inf')
         best_idx = -1
-        for i, (d_pos, d_val) in enumerate(digit_matches):
+        for i, (d_pos, _) in enumerate(digit_matches):
             dist = abs(d_pos - kw_pos)
             if dist < best_dist and dist < 30:
                 best_dist = dist
@@ -723,16 +697,14 @@ def _partition_damage(
         if best_idx >= 0:
             damage_match_positions.add(best_idx)
 
-    # If multiple damage keywords point to the same number, that's fine
     damage_numbers = []
     received_numbers = []
-    for i, (d_pos, d_val) in enumerate(digit_matches):
+    for i, (_, d_val) in enumerate(digit_matches):
         if i in damage_match_positions:
             damage_numbers.append(d_val)
         else:
             received_numbers.append(d_val)
 
-    # Fallback: if damage keyword found but no numbers partitioned
     if not damage_numbers and not received_numbers:
         if len(numbers) >= 2:
             received_numbers = [numbers[0]]
@@ -740,7 +712,7 @@ def _partition_damage(
         else:
             received_numbers = numbers
 
-    return has_damage, damage_numbers, received_numbers
+    return True, damage_numbers, received_numbers
 
 
 def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
@@ -778,11 +750,9 @@ def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
 
 
 def _extract_unit(text: str) -> Optional[str]:
-    """Extract the unit from text using the unit keyword dictionary."""
-    for keyword, normalized in UNIT_KEYWORDS.items():
-        if re.search(r'(?:\b|\d)' + re.escape(keyword) + r'\b', text):
-            return normalized
-    return None
+    """Extract the unit from text using the precompiled unit pattern."""
+    match = _UNIT_KW_RE.search(text)
+    return UNIT_KEYWORDS[match.group(1)] if match else None
 
 
 def _resolve_variant(

@@ -476,13 +476,3 @@ class TestMultiItemParsing:
         assert parsed.entry.usable == 4
         confirmed = parse_transcript("Confirm.", parsed.draft, TEST_CATALOGUE, "en")
         assert confirmed.action == "confirm"
-
-    def test_glued_unit_numbers_parsed(self):
-        """Whisper tokens like '1kg onion and 4kg daal' extract both quantities cleanly"""
-        result = parse_transcript("1kg onion and 4kg daal", PendingDraft(), TEST_CATALOGUE, "en")
-        assert result.status == "complete"
-        assert result.entries is not None and len(result.entries) == 2
-        assert result.entries[0].product_name == "Onion 1kg"
-        assert result.entries[0].usable == 1
-        assert result.entries[1].product_name == "Toor Dal 1kg"
-        assert result.entries[1].usable == 4

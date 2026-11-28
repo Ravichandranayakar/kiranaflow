@@ -29,6 +29,12 @@ interface PendingReceiptCardProps {
   onOpenStock?: () => void;
 }
 
+const WAVEFORM_BARS = [
+  'wb-1', 'wb-3', 'wb-2', 'wb-4', 'wb-5', 'wb-3',
+  'wb-1', 'wb-4', 'wb-2', 'wb-5', 'wb-3', 'wb-1',
+  'wb-4', 'wb-2', 'wb-5', 'wb-3', 'wb-1',
+];
+
 function formatTwoDigits(value: number | null): string {
   if (value === null || Number.isNaN(value)) return '--';
   return value < 10 && value >= 0 ? `0${value}` : String(value);
@@ -92,13 +98,8 @@ export function PendingReceiptCard({
     );
   }
 
-  // LISTENING state: Screen 2 live interim speech + waveform (strictly from SpeechRecognition, never hardcoded)
+  // LISTENING state: Screen 2 live voice status + waveform
   if (flowState === 'LISTENING') {
-    const waveformBars = [
-      'wb-1', 'wb-3', 'wb-2', 'wb-4', 'wb-5', 'wb-3',
-      'wb-1', 'wb-4', 'wb-2', 'wb-5', 'wb-3', 'wb-1',
-      'wb-4', 'wb-2', 'wb-5', 'wb-3', 'wb-1',
-    ];
     return (
       <section className="px-5 -mt-4 relative z-10">
         <div className="bg-white rounded-2xl border border-[#dedad1] shadow-sm overflow-hidden">
@@ -121,7 +122,7 @@ export function PendingReceiptCard({
             {/* Restrained Live Audio Waveform */}
             <div className="py-2.5 px-3 bg-[#fbf9f3] rounded-xl border border-[#eae8e2] flex items-center justify-between">
               <div className="flex items-center gap-1.5 h-8">
-                {waveformBars.map((cls, idx) => (
+                {WAVEFORM_BARS.map((cls, idx) => (
                   <span key={idx} className={`w-[3px] rounded-full bg-[#c6f26a] ${cls}`} />
                 ))}
               </div>

@@ -23,9 +23,10 @@ Runs `SELECT 1` against PostgreSQL and reports active parser configuration.
 
 ---
 
-## 2. `POST /api/voice/transcribe`
+## 2. `POST /api/voice/transcribe` & `POST /api/voice/intake`
 
-Transcribes browser `MediaRecorder` audio (`.webm` / `.ogg` / `.mp4` / `.wav`) using the offline `faster-whisper` (`base`, INT8) engine inside FastAPI with zero external API keys. Works across Chrome, Brave, Firefox, and Edge.
+- **`POST /api/voice/transcribe`**: Transcribes browser `MediaRecorder` audio (`.webm` / `.ogg` / `.mp4` / `.wav`) using the offline `faster-whisper` (`base`, INT8) engine inside FastAPI with zero external API keys. Works across Chrome, Brave, Firefox, and Edge.
+- **`POST /api/voice/intake`**: Single-round-trip voice intake (`audio` + `draft_json` + `lang`) that runs transcription and parsing together and returns the `ParseResponse` directly.
 
 **Request:** `multipart/form-data` with field `audio` (binary blob).
 
