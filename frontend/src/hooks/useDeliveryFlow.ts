@@ -73,6 +73,7 @@ export function useDeliveryFlow() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stopTimeoutRef = useRef<number | null>(null);
   const silenceTimeoutRef = useRef<number | null>(null);
+  const noSpeechTimeoutRef = useRef<number | null>(null);
   const manualStopRef = useRef<boolean>(false);
   const latestSpokenRef = useRef<string>('');
   const isStartingMicRef = useRef<boolean>(false);
@@ -312,6 +313,10 @@ export function useDeliveryFlow() {
         window.clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = null;
       }
+      if (noSpeechTimeoutRef.current !== null) {
+        window.clearTimeout(noSpeechTimeoutRef.current);
+        noSpeechTimeoutRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       manualStopRef.current = false;
@@ -337,6 +342,10 @@ export function useDeliveryFlow() {
     if (silenceTimeoutRef.current !== null) {
       window.clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
+    }
+    if (noSpeechTimeoutRef.current !== null) {
+      window.clearTimeout(noSpeechTimeoutRef.current);
+      noSpeechTimeoutRef.current = null;
     }
     const recognition = recognitionRef.current;
     if (!recognition) {
@@ -403,9 +412,24 @@ export function useDeliveryFlow() {
       playTone('start');
       setFlowState('LISTENING');
       setInterimTranscript('');
+
+      // Never hang in LISTENING if the browser mic hears nothing for 6s
+      if (noSpeechTimeoutRef.current !== null) {
+        window.clearTimeout(noSpeechTimeoutRef.current);
+      }
+      noSpeechTimeoutRef.current = window.setTimeout(() => {
+        if (recognitionRef.current === recognition && !latestSpokenRef.current) {
+          setMicError('No audio heard — check your microphone in Chrome or type below.');
+          stopListening();
+        }
+      }, 6000);
     };
 
     recognition.onresult = (event) => {
+      if (noSpeechTimeoutRef.current !== null) {
+        window.clearTimeout(noSpeechTimeoutRef.current);
+        noSpeechTimeoutRef.current = null;
+      }
       let interim = '';
       let finalChunk = '';
       for (let i = 0; i < event.results.length; i += 1) {
@@ -449,7 +473,9 @@ export function useDeliveryFlow() {
       if (event.error === 'not-allowed') {
         setMicError('Microphone permission denied — use the text input below.');
       } else if (event.error === 'no-speech') {
-        setMicError('No speech detected. Tap the mic and try again.');
+        setMicError('No speech detected. Check your mic or type below.');
+      } else if (event.error === 'network') {
+        setMicError('Browser speech service unreachable (use Chrome or type below).');
       } else if (event.error !== 'aborted') {
         setMicError(`Mic error (${event.error}) — you can type below.`);
       }

@@ -77,7 +77,7 @@ export function createSpeechRecognition(lang: LangCode): SpeechRecognitionLike |
 
   const recognition = new Ctor();
   recognition.lang = LANG_LOCALE_MAP[lang];
-  recognition.continuous = true;
+  recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
   return recognition;
