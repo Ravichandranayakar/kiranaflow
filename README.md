@@ -49,6 +49,91 @@ flowchart LR
 
 ---
 
+## Use Case Diagram
+
+```mermaid
+flowchart LR
+    Shopkeeper(["Shopkeeper (Voice / Touch)"])
+    Supplier(["Supplier (Indirect)"])
+    Parser[["Deterministic Parser & API"]]
+    DB[("PostgreSQL Ledger")]
+
+    subgraph KiranaFlow["KiranaFlow Mobile Web App"]
+        UC01(["Switch Language EN / HI / KN"])
+        UC02(["Speak or Type Delivery"])
+        UC03(["Resolve Clarification"])
+        UC04(["Review Read-Back & Edit"])
+        UC05(["Confirm or Cancel Draft"])
+        UC06(["Commit Stock Atomically"])
+        UC07(["View Usable & Damaged Stock"])
+        UC08(["Copy WhatsApp Reorder Draft"])
+        UC09(["View Delivery Audit History"])
+    end
+
+    Shopkeeper --> UC01
+    Shopkeeper --> UC02
+    Shopkeeper --> UC03
+    Shopkeeper --> UC04
+    Shopkeeper --> UC05
+    Shopkeeper --> UC07
+    Shopkeeper --> UC08
+    Shopkeeper --> UC09
+
+    UC02 --> Parser
+    UC03 --> Parser
+    UC04 --> Parser
+    UC05 --> UC06
+    UC06 --> DB
+    UC07 --> DB
+    UC09 --> DB
+    UC07 -.->|"Damaged count tracked for return"| Supplier
+    UC08 -.->|"Clipboard message sent manually"| Supplier
+```
+
+*Detailed use-case specs: [docs/03-use-cases.md](docs/03-use-cases.md)*
+
+---
+
+## Activity Diagram (Parser Decision Flow)
+
+```mermaid
+flowchart TD
+    Start(["parse_transcript(transcript, draft, catalogue, lang)"]) --> Empty{"transcript empty?"}
+    Empty -->|Yes| ErrResp(["status = error\nquestion_kind = noise"])
+    Empty -->|No| WaitConf{"draft.awaiting_confirmation?"}
+
+    WaitConf -->|Yes| ConfirmKw{"Confirm keyword?\n(confirm / haan / sari)"}
+    ConfirmKw -->|Yes| RetConfirm(["status = complete\naction = confirm"])
+    ConfirmKw -->|No| CancelKw{"Cancel keyword?\n(cancel / nahi / beda)"}
+    CancelKw -->|Yes| RetCancel(["status = complete\naction = cancel"])
+    CancelKw -->|No| CorrTurn["was_corrected = true\nUpdate damaged / received"]
+    CorrTurn --> TryComplete
+
+    WaitConf -->|No| PendingQ{"draft.pending_question_kind\nset?"}
+    PendingQ -->|Yes| MergeClar["_merge_clarification()\nvariant / teen_tens / damaged_qty / unknown_sku"]
+    MergeClar --> TryComplete
+
+    PendingQ -->|No| Step1["Slice numbers after correction marker\nMatch aliases across full phrase"]
+    Step1 --> MatchCount{"Alias matches?"}
+
+    MatchCount -->|"> 1 candidate"| RetVariant(["status = clarify (variant)"])
+    MatchCount -->|"0 matches"| RetUnknown(["status = unknown (unknown_sku)"])
+    MatchCount -->|"1 match"| AssignProd["Extract received & damaged counts\n(damage within 30 chars of keyword)"]
+
+    AssignProd --> DmgMissing{"Damage keyword without\nnearby count?"}
+    DmgMissing -->|Yes| RetDmgQty(["status = clarify (damaged_qty)"])
+    DmgMissing -->|No| TeenCheck{"received in\n13↔30 .. 19↔90?"}
+    TeenCheck -->|Yes| RetTeen(["status = clarify (teen_tens)"])
+    TeenCheck -->|No| TryComplete["_try_complete()\nCheck required fields & damaged <= received"]
+
+    TryComplete -->|Missing / invalid| AskMissing(["status = clarify"])
+    TryComplete -->|Valid| Ready(["usable = received - damaged\nawaiting_confirmation = true + readback_text"])
+```
+
+*Full frontend state machine and rule tables: [docs/06-activity-state-machine.md](docs/06-activity-state-machine.md)*
+
+---
+
 ## Quick Start
 
 ```bash
