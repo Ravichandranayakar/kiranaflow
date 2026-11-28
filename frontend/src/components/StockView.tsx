@@ -1,5 +1,6 @@
 import { memo, useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, Check, Copy, Package, Plus, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import type { StoreProfile } from '../hooks/useDeliveryFlow';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { LangCode, StockItem } from '../types/api';
 
@@ -9,6 +10,7 @@ interface StockViewProps {
   items: StockItem[];
   lowStockCount: number;
   lang: LangCode;
+  storeProfile?: StoreProfile;
   onAdjustStock: (
     productId: number,
     usableDelta: number,
@@ -32,6 +34,7 @@ export const StockView = memo(function StockView({
   items,
   lowStockCount,
   lang,
+  storeProfile,
   onAdjustStock,
   onAddProduct,
   onDeleteProduct,
@@ -133,9 +136,15 @@ export const StockView = memo(function StockView({
 
   const handleCopyReorder = async () => {
     if (lowItems.length === 0) return;
+    const footerParts = [
+      storeProfile?.shopName,
+      storeProfile?.ownerName,
+      storeProfile?.locationNote,
+    ].filter((part): part is string => Boolean(part && part.trim()));
     const lines = [
       'Namaste, please send stock for:',
       ...lowItems.map((i) => `- ${i.product_name} (only ${i.usable_stock} left)`),
+      ...(footerParts.length > 0 ? ['', `— ${footerParts.join(' • ')}`] : []),
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));

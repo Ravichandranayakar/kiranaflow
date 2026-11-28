@@ -28,8 +28,12 @@ function KiranaFlowShell() {
     lowStockCount,
     movements,
     toast,
+    storeProfile,
+    updateStoreProfile,
     isMuted,
     setIsMuted,
+    autoFollowUpMic,
+    setAutoFollowUpMic,
     micSupported,
     micError,
     isConfirming,
@@ -54,6 +58,7 @@ function KiranaFlowShell() {
             lang={lang}
             onChangeLang={setLang}
             onOpenSettings={() => setSettingsOpen(true)}
+            shopName={storeProfile.shopName}
           />
 
           {/* Toast Feedback Banner */}
@@ -121,6 +126,7 @@ function KiranaFlowShell() {
               items={stockItems}
               lowStockCount={lowStockCount}
               lang={lang}
+              storeProfile={storeProfile}
               onAdjustStock={adjustStockItem}
               onAddProduct={addCatalogProduct}
               onDeleteProduct={removeCatalogProduct}
@@ -135,10 +141,18 @@ function KiranaFlowShell() {
         <SettingsModal
           open={settingsOpen}
           lang={lang}
+          onChangeLang={setLang}
           onClose={() => setSettingsOpen(false)}
           health={health}
+          storeProfile={storeProfile}
+          onSaveProfile={updateStoreProfile}
           isMuted={isMuted}
           onToggleMute={() => setIsMuted((m) => !m)}
+          autoFollowUpMic={autoFollowUpMic}
+          onToggleAutoFollowUp={() => setAutoFollowUpMic((a) => !a)}
+          stockCount={stockItems.length}
+          lowStockCount={lowStockCount}
+          movementCount={movements.length}
         />
       </main>
     </div>

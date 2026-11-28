@@ -143,14 +143,29 @@ export interface UIStrings {
   usableDeltaWord: string;
   dmgShortWord: string;
   settingsTitle: string;
+  storeProfileTitle: string;
+  storeProfileUnset: string;
+  shopNameLabel: string;
+  shopNamePlaceholder: string;
+  ownerNameLabel: string;
+  ownerNamePlaceholder: string;
+  locationNoteLabel: string;
+  locationNotePlaceholder: string;
+  saveProfileBtn: string;
+  profileSavedNote: string;
+  voicePrefsTitle: string;
+  preferredLangLabel: string;
   spokenReadbackTitle: string;
   ttsSubtitle: string;
   mutedBtn: string;
   activeBtn: string;
-  optionalKeyTitle: string;
-  customKeyActiveNote: string;
-  keyNotSetPrefix: string;
-  keyPlaceholder: string;
+  autoFollowUpTitle: string;
+  autoFollowUpSubtitle: string;
+  onBtn: string;
+  offBtn: string;
+  engineReadyTitle: string;
+  engineReadyDesc: string;
+  engineConnectingDesc: string;
   noOsVoiceNote: string;
   selectBothAllPrefix: string;
   itemsWord: string;
@@ -303,15 +318,30 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     entriesSuffix: 'Entries',
     usableDeltaWord: 'usable',
     dmgShortWord: 'dmg',
-    settingsTitle: 'Settings & Key Status',
-    spokenReadbackTitle: 'Spoken Read-Back (TTS)',
-    ttsSubtitle: 'Browser speechSynthesis + on-screen text',
+    settingsTitle: 'Store Profile & Settings',
+    storeProfileTitle: 'Store Profile',
+    storeProfileUnset: 'Add your shop name for supplier reorders',
+    shopNameLabel: 'Shop Name',
+    shopNamePlaceholder: 'e.g. Sri Lakshmi Kirana Store',
+    ownerNameLabel: 'Owner Name',
+    ownerNamePlaceholder: 'e.g. Ramesh / Ravi',
+    locationNoteLabel: 'Area / City',
+    locationNotePlaceholder: 'e.g. Indiranagar • Ph: 98xxx',
+    saveProfileBtn: 'Save Profile',
+    profileSavedNote: 'Saved',
+    voicePrefsTitle: 'Voice & Language Preferences',
+    preferredLangLabel: 'App & Voice Language',
+    spokenReadbackTitle: 'Spoken Read-Back',
+    ttsSubtitle: 'Speaks confirmations & questions aloud',
     mutedBtn: 'Muted',
     activeBtn: 'Active',
-    optionalKeyTitle: 'Optional Smart-Parse API Key',
-    customKeyActiveNote: 'Custom key entered locally (optional enhancement).',
-    keyNotSetPrefix: 'Key not set',
-    keyPlaceholder: 'Optional LLM_API_KEY (not required)',
+    autoFollowUpTitle: 'Auto Follow-Up Mic',
+    autoFollowUpSubtitle: 'Opens mic automatically after read-back for “OK / Confirm”',
+    onBtn: 'On',
+    offBtn: 'Off',
+    engineReadyTitle: 'Offline Voice Engine Active',
+    engineReadyDesc: 'Local Whisper STT • PostgreSQL Ledger • Zero API Key Required',
+    engineConnectingDesc: 'Connecting to local Whisper & PostgreSQL service…',
     noOsVoiceNote: 'No native regional voice pack in this browser — using phonetic voice fallback while keeping screen text in your language.',
     selectBothAllPrefix: 'Select All / Both',
     itemsWord: 'items',
@@ -462,15 +492,30 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     entriesSuffix: 'प्रविष्टियाँ',
     usableDeltaWord: 'उपयोगी',
     dmgShortWord: 'खराब',
-    settingsTitle: 'सेटिंग्स और कुंजी स्थिति',
-    spokenReadbackTitle: 'वॉयस पुष्टि (TTS)',
-    ttsSubtitle: 'ब्राउज़र आवाज़ + स्क्रीन पर पाठ',
+    settingsTitle: 'दुकान प्रोफ़ाइल और सेटिंग्स',
+    storeProfileTitle: 'दुकान की प्रोफ़ाइल',
+    storeProfileUnset: 'रीऑर्डर संदेश के लिए दुकान का नाम जोड़ें',
+    shopNameLabel: 'दुकान का नाम',
+    shopNamePlaceholder: 'उदा. श्री लक्ष्मी किराना स्टोर',
+    ownerNameLabel: 'मालिक का नाम',
+    ownerNamePlaceholder: 'उदा. रमेश / रवि',
+    locationNoteLabel: 'पता / शहर',
+    locationNotePlaceholder: 'उदा. इंदिरानगर • मोबाइल',
+    saveProfileBtn: 'प्रोफ़ाइल सहेजें',
+    profileSavedNote: 'सहेजा गया',
+    voicePrefsTitle: 'आवाज़ और भाषा सेटिंग्स',
+    preferredLangLabel: 'ऐप और आवाज़ भाषा',
+    spokenReadbackTitle: 'बोलकर पुष्टि',
+    ttsSubtitle: 'पुष्टि और प्रश्न ज़ोर से सुनाता है',
     mutedBtn: 'म्यूट',
     activeBtn: 'चालू',
-    optionalKeyTitle: 'वैकल्पिक स्मार्ट-पार्स API कुंजी',
-    customKeyActiveNote: 'स्थानीय कस्टम कुंजी दर्ज है (वैकल्पिक)।',
-    keyNotSetPrefix: 'कुंजी सेट नहीं है',
-    keyPlaceholder: 'वैकल्पिक LLM_API_KEY (ज़रूरी नहीं)',
+    autoFollowUpTitle: 'ऑटो फ़ॉलो-अप माइक',
+    autoFollowUpSubtitle: 'बोलकर पुष्टि के बाद “हाँ / OK” सुनने के लिए माइक अपने आप खोलता है',
+    onBtn: 'चालू',
+    offBtn: 'बंद',
+    engineReadyTitle: 'ऑफ़लाइन वॉयस इंजन चालू है',
+    engineReadyDesc: 'लोकल Whisper STT • PostgreSQL बहीखाता • कोई API कुंजी आवश्यक नहीं',
+    engineConnectingDesc: 'लोकल Whisper और PostgreSQL सेवा से जुड़ रहा है…',
     noOsVoiceNote: 'ब्राउज़र में हिन्दी आवाज़ पैक न होने पर हिंग्लिश उच्चारण आवाज़ चल रही है — स्क्रीन पर पाठ हिन्दी में है।',
     selectBothAllPrefix: 'दोनों / सभी चुनें',
     itemsWord: 'आइटम',
@@ -621,15 +666,30 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     entriesSuffix: 'ನಮೂದುಗಳು',
     usableDeltaWord: 'ಬಳಸಬಹುದಾದ',
     dmgShortWord: 'ಹಾಳಾದ',
-    settingsTitle: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಮತ್ತು ಕೀ ಸ್ಥಿತಿ',
-    spokenReadbackTitle: 'ಧ್ವನಿ ಪರಿಶೀಲನೆ (TTS)',
-    ttsSubtitle: 'ಬ್ರೌಸರ್ ಧ್ವನಿ + ಪರದೆಯ ಮೇಲಿನ ಪಠ್ಯ',
+    settingsTitle: 'ಅಂಗಡಿ ಪ್ರೊಫೈಲ್ ಮತ್ತು ಸೆಟ್ಟಿಂಗ್‌ಗಳು',
+    storeProfileTitle: 'ಅಂಗಡಿ ಪ್ರೊಫೈಲ್',
+    storeProfileUnset: 'ರೀಆರ್ಡರ್ ಸಂದೇಶಕ್ಕಾಗಿ ಅಂಗಡಿ ಹೆಸರು ಸೇರಿಸಿ',
+    shopNameLabel: 'ಅಂಗಡಿ ಹೆಸರು',
+    shopNamePlaceholder: 'ಉದಾ. ಶ್ರೀ ಲಕ್ಷ್ಮಿ ಕಿರಾಣಿ ಸ್ಟೋರ್',
+    ownerNameLabel: 'ಮಾಲೀಕರ ಹೆಸರು',
+    ownerNamePlaceholder: 'ಉದಾ. ರಮೇಶ್ / ರವಿ',
+    locationNoteLabel: 'ವಿಳಾಸ / ಊರು',
+    locationNotePlaceholder: 'ಉದಾ. ಇಂದಿರಾನಗರ • ಫೋನ್',
+    saveProfileBtn: 'ಪ್ರೊಫೈಲ್ ಉಳಿಸಿ',
+    profileSavedNote: 'ಉಳಿಸಲಾಗಿದೆ',
+    voicePrefsTitle: 'ಧ್ವನಿ ಮತ್ತು ಭಾಷಾ ಆಯ್ಕೆಗಳು',
+    preferredLangLabel: 'ಆ್ಯಪ್ ಮತ್ತು ಧ್ವನಿ ಭಾಷೆ',
+    spokenReadbackTitle: 'ಧ್ವನಿ ಪರಿಶೀಲನೆ',
+    ttsSubtitle: 'ದೃಢೀಕರಣ ಮತ್ತು ಪ್ರಶ್ನೆಗಳನ್ನು ಓದಿ ಹೇಳುತ್ತದೆ',
     mutedBtn: 'ಮ್ಯೂಟ್',
     activeBtn: 'ಸಕ್ರಿಯ',
-    optionalKeyTitle: 'ಐಚ್ಛಿಕ ಸ್ಮಾರ್ಟ್-ಪಾರ್ಸ್ API ಕೀ',
-    customKeyActiveNote: 'ಕಸ್ಟಮ್ ಕೀ ಸ್ಥಳೀಯವಾಗಿ ನೀಡಲಾಗಿದೆ (ಐಚ್ಛಿಕ).',
-    keyNotSetPrefix: 'ಕೀ ಹೊಂದಿಸಲಾಗಿಲ್ಲ',
-    keyPlaceholder: 'ಐಚ್ಛಿಕ LLM_API_KEY (ಅಗತ್ಯವಿಲ್ಲ)',
+    autoFollowUpTitle: 'ಸ್ವಯಂಚಾಲಿತ ಫಾಲೋ-ಅಪ್ ಮೈಕ್',
+    autoFollowUpSubtitle: 'ಧ್ವನಿ ಓದಿದ ನಂತರ “ಸರಿ / OK” ಕೇಳಲು ಮೈಕ್ ತಾನಾಗೇ ತೆರೆಯುತ್ತದೆ',
+    onBtn: 'ಆನ್',
+    offBtn: 'ಆಫ್',
+    engineReadyTitle: 'ಆಫ್‌ಲೈನ್ ಧ್ವನಿ ಎಂಜಿನ್ ಸಕ್ರಿಯವಾಗಿದೆ',
+    engineReadyDesc: 'ಸ್ಥಳೀಯ Whisper STT • PostgreSQL ಲೆಡ್ಜರ್ • API ಕೀ ಅಗತ್ಯವಿಲ್ಲ',
+    engineConnectingDesc: 'ಸ್ಥಳೀಯ Whisper ಮತ್ತು PostgreSQL ಸೇವೆಗೆ ಸಂಪರ್ಕಿಸಲಾಗುತ್ತಿದೆ…',
     noOsVoiceNote: 'ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಇಲ್ಲದ ಕಾರಣ ರೋಮನ್ ಧ್ವನಿ ಓದಲಾಗುತ್ತಿದೆ — ಪರದೆಯ ಪಠ್ಯ ಕನ್ನಡದಲ್ಲೇ ಇದೆ.',
     selectBothAllPrefix: 'ಎರಡನ್ನೂ / ಎಲ್ಲವನ್ನೂ ಆಯ್ಕೆಮಾಡಿ',
     itemsWord: 'ವಸ್ತುಗಳು',

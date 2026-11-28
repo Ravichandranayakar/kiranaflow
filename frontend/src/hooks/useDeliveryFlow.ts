@@ -63,6 +63,66 @@ export interface ToastNotice {
   message: string;
 }
 
+export interface StoreProfile {
+  shopName: string;
+  ownerName: string;
+  locationNote: string;
+}
+
+const PROFILE_STORAGE_KEY = 'kiranaflow_store_profile_v1';
+const PREFS_STORAGE_KEY = 'kiranaflow_voice_prefs_v1';
+
+const DEFAULT_STORE_PROFILE: StoreProfile = {
+  shopName: '',
+  ownerName: '',
+  locationNote: '',
+};
+
+interface VoicePrefs {
+  isMuted: boolean;
+  autoFollowUpMic: boolean;
+}
+
+const DEFAULT_VOICE_PREFS: VoicePrefs = {
+  isMuted: false,
+  autoFollowUpMic: true,
+};
+
+function loadStoredProfile(): StoreProfile {
+  if (typeof window === 'undefined') return DEFAULT_STORE_PROFILE;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_STORE_PROFILE;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return DEFAULT_STORE_PROFILE;
+    const obj = parsed as Record<string, unknown>;
+    return {
+      shopName: typeof obj.shopName === 'string' ? obj.shopName : '',
+      ownerName: typeof obj.ownerName === 'string' ? obj.ownerName : '',
+      locationNote: typeof obj.locationNote === 'string' ? obj.locationNote : '',
+    };
+  } catch {
+    return DEFAULT_STORE_PROFILE;
+  }
+}
+
+function loadStoredPrefs(): VoicePrefs {
+  if (typeof window === 'undefined') return DEFAULT_VOICE_PREFS;
+  try {
+    const raw = window.localStorage.getItem(PREFS_STORAGE_KEY);
+    if (!raw) return DEFAULT_VOICE_PREFS;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return DEFAULT_VOICE_PREFS;
+    const obj = parsed as Record<string, unknown>;
+    return {
+      isMuted: typeof obj.isMuted === 'boolean' ? obj.isMuted : false,
+      autoFollowUpMic: typeof obj.autoFollowUpMic === 'boolean' ? obj.autoFollowUpMic : true,
+    };
+  } catch {
+    return DEFAULT_VOICE_PREFS;
+  }
+}
+
 export function useDeliveryFlow() {
   const [lang, setLang] = useState<LangCode>('en');
   const [flowState, setFlowState] = useState<FlowState>('IDLE');
@@ -77,7 +137,10 @@ export function useDeliveryFlow() {
   const [lowStockCount, setLowStockCount] = useState<number>(0);
   const [movements, setMovements] = useState<MovementRecord[]>([]);
   const [toast, setToast] = useState<ToastNotice | null>(null);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile>(() => loadStoredProfile());
+  const [initialPrefs] = useState<VoicePrefs>(() => loadStoredPrefs());
+  const [isMuted, setIsMutedState] = useState<boolean>(initialPrefs.isMuted);
+  const [autoFollowUpMic, setAutoFollowUpMicState] = useState<boolean>(initialPrefs.autoFollowUpMic);
   const [micSupported] = useState<boolean>(() => isSpeechRecognitionSupported());
   const [micError, setMicError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
@@ -88,6 +151,58 @@ export function useDeliveryFlow() {
   const isStartingMicRef = useRef<boolean>(false);
   const flowStateRef = useRef<FlowState>(flowState);
   flowStateRef.current = flowState;
+  const autoFollowUpRef = useRef<boolean>(autoFollowUpMic);
+  autoFollowUpRef.current = autoFollowUpMic;
+
+  const persistPrefs = useCallback((nextMuted: boolean, nextAutoFollowUp: boolean) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        PREFS_STORAGE_KEY,
+        JSON.stringify({ isMuted: nextMuted, autoFollowUpMic: nextAutoFollowUp }),
+      );
+    } catch {
+      // Ignore storage quota / private mode restrictions
+    }
+  }, []);
+
+  const setIsMuted = useCallback(
+    (updater: boolean | ((prev: boolean) => boolean)) => {
+      setIsMutedState((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        persistPrefs(next, autoFollowUpRef.current);
+        return next;
+      });
+    },
+    [persistPrefs],
+  );
+
+  const setAutoFollowUpMic = useCallback(
+    (updater: boolean | ((prev: boolean) => boolean)) => {
+      setAutoFollowUpMicState((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        persistPrefs(isMuted, next);
+        return next;
+      });
+    },
+    [isMuted, persistPrefs],
+  );
+
+  const updateStoreProfile = useCallback((next: StoreProfile) => {
+    const cleaned: StoreProfile = {
+      shopName: next.shopName.trim(),
+      ownerName: next.ownerName.trim(),
+      locationNote: next.locationNote.trim(),
+    };
+    setStoreProfile(cleaned);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(cleaned));
+      } catch {
+        // Ignore storage quota / private mode restrictions
+      }
+    }
+  }, []);
   const startFollowUpMicRef = useRef<() => void>(() => {});
   const draftRef = useRef<PendingDraft>(EMPTY_DRAFT);
   draftRef.current = draft;
@@ -249,7 +364,7 @@ export function useDeliveryFlow() {
             spokenReadback || fallbackReadback || '',
             langRef.current,
             isMuted,
-            source === 'voice'
+            source === 'voice' && autoFollowUpRef.current
               ? () => {
                   if (
                     flowStateRef.current === 'AWAITING_CONFIRMATION' &&
@@ -271,7 +386,7 @@ export function useDeliveryFlow() {
             spokenQ ?? fallbackQ ?? '',
             langRef.current,
             isMuted,
-            source === 'voice' && res.status === 'clarify'
+            source === 'voice' && res.status === 'clarify' && autoFollowUpRef.current
               ? () => {
                   if (flowStateRef.current === 'NEEDS_CLARIFICATION') {
                     startFollowUpMicRef.current();
@@ -743,8 +858,12 @@ export function useDeliveryFlow() {
     lowStockCount,
     movements,
     toast,
+    storeProfile,
+    updateStoreProfile,
     isMuted,
     setIsMuted,
+    autoFollowUpMic,
+    setAutoFollowUpMic,
     micSupported,
     micError,
     isConfirming,
