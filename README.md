@@ -107,14 +107,3 @@ kiranaflow/
 | Voice Input | Browser Web Speech API (`en-IN`, `hi-IN`, `kn-IN`) + WebRTC mic constraints |
 | Voice Output | Browser Web Speech Synthesis + Web Audio feedback chimes |
 | Runtime | Docker & Docker Compose (`db`, `backend`, `frontend` via Nginx) |
-
----
-
-## Team & Contribution Ownership
-
-| Area | Owner | Owned Artifacts |
-|------|-------|-----------------|
-| Product & Demo Lead | Ravichandran Nayakar | Repository architecture, UI/voice integration, product docs (`README.md`, `01`, `11`) |
-| Backend & Database | *(Add teammate / role if team)* | PostgreSQL schema, atomic transactions, API routes (`04`, `07`, `08`) |
-| Parser & Verification | *(Add teammate / role if team)* | Deterministic parser rules, multilingual aliases, pytest suite (`02`, `06`, `09`) |
-| Frontend & UX | *(Add teammate / role if team)* | Mobile state cards, i18n translations, Stock/History views (`03`, `05`, `10`) |
