@@ -106,6 +106,8 @@ export interface UIStrings {
   nextEntry: string;
   nextEntryHint: string;
   openStockLedger: string;
+  draftReorder: string;
+  reorderCopied: string;
 }
 
 export const TRANSLATIONS: Record<LangCode, UIStrings> = {
@@ -215,6 +217,8 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     nextEntry: 'NEXT ENTRY',
     nextEntryHint: 'Returns to voice intake for next item',
     openStockLedger: 'Open Stock Ledger',
+    draftReorder: 'Copy WhatsApp Reorder Draft',
+    reorderCopied: 'Reorder draft copied!',
   },
   hi: {
     serviceConnected: 'सेवा जुड़ी है',
@@ -322,6 +326,8 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     nextEntry: 'अगली प्रविष्टि',
     nextEntryHint: 'अगले सामान के लिए बोलने पर वापस जाएं',
     openStockLedger: 'स्टॉक बहीखाता खोलें',
+    draftReorder: 'व्हाट्सएप रीऑर्डर ड्राफ्ट कॉपी करें',
+    reorderCopied: 'रीऑर्डर ड्राफ्ट कॉपी हो गया!',
   },
   kn: {
     serviceConnected: 'ಸೇವೆ ಸಂಪರ್ಕಗೊಂಡಿದೆ',
@@ -429,5 +435,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     nextEntry: 'ಮುಂದಿನ ನಮೂದು',
     nextEntryHint: 'ಮುಂದಿನ ವಸ್ತುವಿಗಾಗಿ ಧ್ವನಿ ಪರದೆಗೆ ಹಿಂತಿರುಗಿ',
     openStockLedger: 'ದಾಸ್ತಾನು ಲೆಡ್ಜರ್ ತೆರೆಯಿರಿ',
+    draftReorder: 'ವಾಟ್ಸಾಪ್ ರೀಆರ್ಡರ್ ಡ್ರಾಫ್ಟ್ ನಕಲಿಸಿ',
+    reorderCopied: 'ರೀಆರ್ಡರ್ ಡ್ರಾಫ್ಟ್ ನಕಲಿಸಲಾಗಿದೆ!',
   },
 };

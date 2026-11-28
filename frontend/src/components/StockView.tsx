@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Package } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Package } from 'lucide-react';
 import { TRANSLATIONS } from '../i18n/translations';
 import type { LangCode, StockItem } from '../types/api';
 
@@ -13,9 +13,26 @@ type FilterMode = 'all' | 'low' | 'damaged';
 
 export function StockView({ items, lowStockCount, lang }: StockViewProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
+  const [copied, setCopied] = useState<boolean>(false);
   const t = TRANSLATIONS[lang];
 
+  const lowItems = items.filter((i) => i.is_low);
   const damagedCount = items.filter((i) => i.damaged_stock > 0).length;
+
+  const handleCopyReorder = async () => {
+    if (lowItems.length === 0) return;
+    const lines = [
+      'Namaste, please send stock for:',
+      ...lowItems.map((i) => `- ${i.product_name} (only ${i.usable_stock} left)`),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard unavailable in non-HTTPS contexts
+    }
+  };
 
   const filtered = items.filter((item) => {
     if (filter === 'low') return item.is_low;
@@ -69,6 +86,27 @@ export function StockView({ items, lowStockCount, lang }: StockViewProps) {
           {t.damagedFilter} ({damagedCount})
         </button>
       </div>
+
+      {/* Shareable Reorder Draft (never auto-orders) */}
+      {lowItems.length > 0 && (
+        <button
+          type="button"
+          onClick={() => void handleCopyReorder()}
+          className="w-full py-2.5 px-3.5 rounded-xl bg-white border border-[#dedad1] hover:border-[#1c1b1b] flex items-center justify-center gap-2 font-display text-xs font-semibold text-[#1b1c18] shadow-xs transition-colors"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-[#39734c]" />
+              <span className="text-[#39734c]">{t.reorderCopied}</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5 text-[#4b6700]" />
+              <span>{t.draftReorder} ({lowItems.length})</span>
+            </>
+          )}
+        </button>
+      )}
 
       {/* Stock List */}
       <div className="space-y-2">
