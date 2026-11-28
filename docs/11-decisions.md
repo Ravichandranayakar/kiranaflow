@@ -4,7 +4,7 @@
 
 - **Context:** Calling external LLM APIs for every utterance introduces API key setup friction, per-call latency, network failure modes, and non-deterministic hallucinated JSON fields during judge evaluation.
 - **Decision:** Implement the primary parsing engine cleanly in pure Python ([`backend/app/services/parser.py`](../backend/app/services/parser.py)) using multilingual alias dictionaries, number-word tables (EN/HI/KN), regex partitioning, and rule-based disambiguation, while keeping `LLM_API_KEY` strictly optional in [`backend/app/config.py`](../backend/app/config.py).
-- **Consequences:** Works out of the box with zero secrets via `docker compose up --build`, executes deterministically in sub-millisecond time, and runs 37 fast unit tests without network or database dependencies.
+- **Consequences:** Works out of the box with zero secrets via `docker compose up --build`, executes deterministically in sub-millisecond time, and runs 42 fast unit tests without network or database dependencies.
 
 ---
 

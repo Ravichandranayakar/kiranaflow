@@ -104,20 +104,20 @@ flowchart TD
     Empty -->|Yes| ErrResp(["status = error\nquestion_kind = noise"])
     Empty -->|No| WaitConf{"draft.awaiting_confirmation?"}
 
-    WaitConf -->|Yes| ConfirmKw{"Confirm keyword?\n(confirm / haan / sari)"}
+    WaitConf -->|Yes| ConfirmKw{"Confirm keyword?\n(ok / ya / confirm / haan / houdu / sari)"}
     ConfirmKw -->|Yes| RetConfirm(["status = complete\naction = confirm"])
     ConfirmKw -->|No| CancelKw{"Cancel keyword?\n(cancel / nahi / beda)"}
     CancelKw -->|Yes| RetCancel(["status = complete\naction = cancel"])
-    CancelKw -->|No| CorrTurn["was_corrected = true\nUpdate damaged / received"]
+    CancelKw -->|No| CorrTurn["was_corrected = true\nUpdate single or batch counts"]
     CorrTurn --> TryComplete
 
     WaitConf -->|No| PendingQ{"draft.pending_question_kind\nset?"}
-    PendingQ -->|Yes| MergeClar["_merge_clarification()\nvariant / teen_tens / damaged_qty / unknown_sku"]
+    PendingQ -->|Yes| MergeClar["_merge_clarification()\nvariant / both / teen_tens / received_qty / damaged_qty / unknown_sku"]
     MergeClar --> TryComplete
 
-    PendingQ -->|No| MultiSplit["Split multi-item clauses\n('and' / 'aur' / 'mattu')"]
-    MultiSplit --> Step1["Slice numbers after correction marker\nMatch aliases across full phrase"]
-    Step1 --> MatchCount{"Alias matches?"}
+    PendingQ -->|No| MultiSplit["Split multi-item clauses\n('and' / 'aur' / 'mattu' / ',')"]
+    MultiSplit --> Step1["Slice numbers after correction marker\n3-tier match: exact -> brand word -> fuzzy"]
+    Step1 --> MatchCount{"SKU matches?"}
 
     MatchCount -->|"> 1 candidate"| RetVariant(["status = clarify (variant)"])
     MatchCount -->|"0 matches"| RetUnknown(["status = unknown (unknown_sku)"])
@@ -154,18 +154,20 @@ docker compose up --build
 | **Health Check** | [http://localhost:8080/api/health](http://localhost:8080/api/health) | Verifies live `SELECT 1` DB connection and active parser mode |
 | **Local Vite Dev** | [http://localhost:5173](http://localhost:5173) | Optional dev mode via `cd frontend && npm install && npm run dev` |
 
-> **Universal Voice & Offline Fallback:** Voice capture uses standard browser `MediaRecorder` + adaptive `1.0s` silence detection paired with single-round-trip offline `faster-whisper` transcription (`/api/voice/intake`), so the mic works across **Chrome, Brave, Firefox, and Edge** with zero external API keys. Every flow also works via **Or type instead** and the 6 one-tap **Try a test case** chips.
+> **Universal Hands-Free Voice & Fallback:** Voice capture uses standard browser `MediaRecorder` + adaptive `1.0s` silence detection paired with single-round-trip offline `faster-whisper` transcription (`/api/voice/intake`), so the mic works across **Chrome, Brave, Firefox, and Edge** with zero external API keys. After a spoken read-back or clarification finishes (`350ms` decay buffer), the mic **automatically re-opens once** (plus a thumb-zone **Speak “OK / Confirm” or Edit** pill on the card) so busy shopkeepers can finish hands-free. Every flow also works via **Or type instead** and the 6 one-tap **Try a test case** chips.
 
 ---
 
 ## Key Capabilities & Safety Guards
 
 - **Zero External API Keys:** Runs completely locally out of the box (`LLM_API_KEY=""` by default). All alias matching, number extraction, unit mapping (`petis`, `darjan`, `patta`), and state transitions run in deterministic Python ([parser.py](backend/app/services/parser.py)).
-- **Confirm-Before-Write Guard:** Spoken confirmation commands (`Confirm`, `Haan`, `Sari`) are ignored outside `awaiting_confirmation`. Nothing touches stock until explicitly confirmed.
-- **Mishearing & Correction Protection:** Flags teen/tens ambiguity (`13↔30` through `19↔90`) and resolves mid-sentence self-corrections (e.g., `"actually"`, `"no no"`, `"nahi"`, or Kannada `"illa"`) while keeping the product name from the full sentence.
+- **Hands-Free Confirm-Before-Write Guard:** Spoken confirmation commands (`OK`, `Ya`, `Confirm`, `Haan`, `Houdu`, `Sari`) only commit during `awaiting_confirmation`. After spoken read-back finishes (`350ms`), the mic opens automatically once so you can confirm or dictate single/dual edits (`"28 packets and 3 damaged"` or `"maggi 12"`) without touching buttons.
+- **Casual Short & Speech-Tolerant Product Matching:** Shopkeepers do not need exact titles like `"Maggi Noodles 70g"` — casual short names (`"5 oil"`, `"10 parle"`, `"5 fortune"`) and speech spellings (`"5 magi"`, `"5 colget"`, `"5 nandhini"`) resolve via a 3-tier matcher, while ambiguous short names (`"10 atta"`) prompt once (`1kg` vs `5kg`) and unlisted goods (`"1 kg of gold"`) stay blocked as `unknown_sku`.
+- **Both / Multi-Item Batch Flow:** Handles multi-item phrases (`"1 kg onion and 4 kg daal"`, `"5 onion and maggi"`) and `"both"` / **Select All / Both** choices on multi-SKU prompts, guiding any missing quantity via `received_qty`.
+- **Mishearing & Correction Protection:** Flags teen/tens ambiguity (`13↔30` through `19↔90`) and resolves mid-sentence self-corrections (e.g., `"actually"`, `"no no"`, `"nahi"`, or Kannada `"illa"`) while keeping product recognition across the full sentence.
 - **Usable vs. Return Accounting:** Separates sellable `usable_stock` from supplier-claim `damaged_stock` across both `products` and immutable `stock_movements`.
 - **Race-Free & Idempotent Commits:** Uses SQL atomic increments (`usable_stock = usable_stock + delta`) and a `UNIQUE` UUID `idempotency_key` so retried requests never double-count.
-- **Reorder Drafts & Multilingual UI:** Instant header switching between English (`E`), Hindi (`हि`), and Kannada (`ಕ`), low-stock filtering, and one-click **Copy WhatsApp Reorder Draft** on the **Stock** tab.
+- **Decoupled EN / HI / KN UI & Live Midway Read-Backs:** Switching **`E`**, **`हि`**, and **`ಕ`** switches UI copy, badges, units, prompts, and spoken read-backs live (even midway through a review card) while still accepting Hinglish/Kanglish speech regardless of UI language, alongside **Copy WhatsApp Reorder Draft** on **Stock**.
 
 ---
 
@@ -174,11 +176,14 @@ docker compose up --build
 | Input Phrase | Parsed Outcome |
 |--------------|----------------|
 | `"24 milk packets bandide 2 odada ide"` | `Nandini Toned Milk 500ml` → `24` received, `2` damaged, `+22` usable |
+| `"5 magi"` / `"10 parle"` / `"5 oil"` | Resolves casual/fuzzy short names directly to confirm card (`Maggi Noodles 70g`, `Parle-G`, `Fortune Oil`) |
+| `"10 atta"` | Triggers `variant` prompt (`Aashirvaad Atta 1kg` vs `5kg`) instead of guessing size |
 | `"14 milk packets"` | Triggers `teen_tens` guard → asks `"Did you say 14 or 40?"` |
 | `"10 fortune oil illa illa 12 packets 1 leaky"` | `Fortune Sunflower Oil 1L` → drops `10`, keeps `12` received, `1` damaged |
 | `"10 cheeni 2 kharab"` | `Loose Sugar 1kg` → `10` received, `2` damaged, `+8` usable |
 | `"1 kg onion and 4 kg daal"` | Parses **2 items** (`Onion 1kg: +1`, `Toor Dal 1kg: +4`) for batch confirm |
-| `"10 packets amul butter"` | Returns `unknown_sku` without modifying catalogue or stock |
+| `"tata salt maggi"` -> `"both"` | Queues both items cleanly and prompts for each missing `received_qty` |
+| `"1 kg of gold"` | Returns `unknown_sku` without modifying catalogue or stock |
 
 ---
 
@@ -207,7 +212,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 37 passed in 0.33s
+# 42 passed in 0.43s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit
@@ -229,9 +234,9 @@ Full verification results and PostgreSQL idempotency evidence are documented in 
 | [06 — State Machine & Speech Parser](docs/06-activity-state-machine.md) | Delivery state machine, `parser.py` decision tree, and EN/HI/KN dictionaries |
 | [07 — Data Model](docs/07-data-model.md) | PostgreSQL ER diagram (`db_models.py`) & 15-SKU seed catalogue |
 | [08 — API Reference](docs/08-api-reference.md) | Verified live JSON payloads for all REST endpoints |
-| [09 — Test Plan & Results](docs/09-test-plan-and-results.md) | `37 passed` pytest evidence, TypeScript check & idempotency proof |
+| [09 — Test Plan & Results](docs/09-test-plan-and-results.md) | `42 passed` pytest evidence, TypeScript check & idempotency proof |
 | [10 — User Guide](docs/10-user-guide.md) | Shopkeeper workflow, language switcher, mic/text modes & settings |
-| [11 — Architecture Decisions (ADRs)](docs/11-decisions.md) | 5 key engineering trade-offs & implementation proofs |
+| [11 — Architecture Decisions (ADRs)](docs/11-decisions.md) | 6 key engineering trade-offs & implementation proofs |
 
 ---
 
@@ -248,7 +253,7 @@ kiranaflow/
 │   ├── requirements.txt
 │   ├── main.py                   # FastAPI entrypoint & idempotent startup seeding
 │   ├── tests/
-│   │   └── test_parser.py        # 37 standalone parser unit tests
+│   │   └── test_parser.py        # 42 standalone parser unit tests
 │   └── app/
 │       ├── config.py             # Environment settings
 │       ├── db.py                 # SQLAlchemy engine, session & health check

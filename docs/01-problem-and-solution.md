@@ -28,8 +28,8 @@ Small Indian kirana shopkeepers receive morning supplier deliveries (crates of m
 
 Voice is the primary input modality because **receiving stock is a physical, eyes-busy, hands-busy task**. Instead of turning intake into form navigation:
 
-1. **Tap once to speak:** Push-to-Talk mic opens only on deliberate tap and auto-stops after `1.0s` of post-speech silence (or closes cleanly after `7s` if no voice is heard), preventing continuous background eavesdropping.
-2. **Confirm-before-write safety:** Spoken input **never** mutates inventory directly. Every parsed delivery enters `AWAITING_CONFIRMATION`, reads the numbers back aloud (and visually), and waits for explicit `"Confirm"`, `"Haan"`, `"Sari"`, or button tap.
+1. **Tap once to speak (+ hands-free confirm loop):** Push-to-Talk mic opens on tap and auto-stops after `1.0s` of post-speech silence (or closes cleanly after `7s` if no voice is heard). When started by voice, once KiranaFlow finishes speaking its confirmation read-back or clarification prompt (`350ms` after speech ends), the mic **automatically re-opens once** (plus a thumb-zone **Speak “OK / Confirm” or Edit** button right on the card) so a busy shopkeeper can say `"ok"`, `"ya confirm"`, `"haan"`, `"houdu"`, `"sari"`, or a spoken correction without touching any button.
+2. **Casual short names + confirm-before-write safety:** Shopkeepers can say natural short names (`"5 magi"`, `"10 parle"`, `"5 oil"`, `"10 atta"`) without reciting weights like `"70g"` or `"500ml"`. Voice input **never** mutates inventory directly: ambiguous sizes prompt once, multi-item prompts support `"both"`, every parsed delivery enters `AWAITING_CONFIRMATION` (updating live across `E / हि / ಕ` even if switched midway), and writes commit only on explicit confirmation.
 3. **Graceful non-voice fallback:** Where a microphone is unavailable, muted, or blocked by counter noise, **Or type instead** and 6 one-tap **Try a test case** chips drive the exact same backend pipeline.
 
 ---
@@ -40,7 +40,7 @@ KiranaFlow organizes the workflow into three bottom-navigated tabs:
 
 | Tab | Role in Kirana Store | Underlying Guarantee |
 |-----|----------------------|----------------------|
-| **Speak** | Hands-free single- or multi-item delivery intake, clarification, read-back, confirm/cancel | Backend state machine (`POST /api/voice/intake` & `/api/voice/parse`) echoes full `PendingDraft`; nothing saves until confirmed |
+| **Speak** | Hands-free single- or multi-item delivery intake, short/fuzzy brand matching, `"both"` resolution, clarification, live `E/हि/ಕ` read-back, and voice confirm/cancel | Backend state machine (`POST /api/voice/intake` & `/api/voice/parse`) echoes full `PendingDraft`; nothing saves until confirmed |
 | **Stock** | Live shelf view distinguishing `Usable` vs `Return` (damaged), `+` / `-` manual stock updates, `Add Item` / delete SKU management, low-stock alerts, and **Copy WhatsApp Reorder Draft** | Atomic SQL increments on `products`; never allows negative stock or places automated supplier orders |
 | **History** | Immutable delivery audit trail showing raw transcript, language, source (`voice`/`text`/`demo`/`manual`), and correction flag | Append-only `stock_movements` table protected by unique `idempotency_key` |
 
@@ -50,5 +50,5 @@ KiranaFlow organizes the workflow into three bottom-navigated tabs:
 
 To maximize stability and zero-setup judge reproducibility in Round 2:
 
-- **Included:** Cross-browser `MediaRecorder` capture + offline `faster-whisper` transcription (`base`, INT8), deterministic rule-based multilingual parser (`parser.py`) supporting single and multi-item deliveries, 15 pre-seeded Indian grocery SKUs with EN/HI/KN phonetic aliases (`seed.py`) plus explicit **Add Item** / delete SKU and manual stock adjustment controls, 3-language UI + read-back (`en`, `hi`, `kn`), atomic PostgreSQL persistence, idempotent confirmations, and clipboard WhatsApp low-stock reorder drafts.
-- **Intentionally Deferred (Out of MVP Scope):** User authentication/multi-tenant store accounts, POS customer billing, automated supplier order dispatch, spoken `"what is running low?"` voice command (handled visually on the **Stock** tab instead), and mandatory cloud LLM keys (`LLM_API_KEY` is optional and empty by default).
+- **Included:** Cross-browser `MediaRecorder` capture + offline `faster-whisper` transcription (`base`, INT8), `350ms` post-readback hands-free follow-up mic + inline card mic button, deterministic 3-tier product matcher (exact aliases + casual brand words + speech-spelling fuzzy fallback), multi-item/`"both"` batch confirmation, decoupled `E / हि / ಕ` UI + live midway read-back translation, 15 pre-seeded Indian grocery SKUs + explicit **Add Item** / delete SKU and manual `+`/`-` adjustments, atomic PostgreSQL persistence, idempotent confirmations, and clipboard WhatsApp low-stock reorder drafts.
+- **Intentionally Deferred (Finale Roadmap):** Dedicated Indian regional ASR + native Devanagari/Kannada script parsing for pure regional speech, bulk 500-SKU FMCG master onboarding / invoice OCR photo import, inline new-SKU quick-create from unknown prompts, user authentication/multi-tenant store accounts, POS customer billing, automated supplier order dispatch, and mandatory cloud LLM keys (`LLM_API_KEY` is optional and empty by default).

@@ -34,16 +34,16 @@ sequenceDiagram
     API-->>UI: 200 OK (complete entry + readback_text)
     UI->>S: Displays Chartreuse "+40" review card & speaks read-back
 
-    alt Spoken confirmation while awaiting_confirmation == true
-        S->>UI: Speaks "Confirm" / "Haan" / "Sari"
-        Hook->>API: POST /api/voice/parse {transcript:"confirm", draft:<awaiting draft>}
+    alt Spoken confirmation while awaiting_confirmation == true (auto follow-up mic opens 350ms after read-back)
+        S->>UI: Speaks "OK" / "Ya confirm" / "Confirm" / "Haan" / "Houdu" / "Sari"
+        Hook->>API: POST /api/voice/intake (or /parse) {draft:<awaiting draft>}
         API->>Parser: _handle_confirmation_turn()
         Parser-->>API: ParseResponse(status:"complete", action:"confirm", entry:{...})
         API-->>Hook: Proceeds to POST /api/deliveries/confirm
     else Spoken correction while awaiting_confirmation == true
-        S->>UI: Speaks "actually 3 packets are damaged"
-        Hook->>API: POST /api/voice/parse {transcript:"actually 3...", draft:<awaiting draft>}
-        API-->>Hook: ParseResponse(status:"complete", draft:{damaged:3, usable:37, was_corrected:true})
+        S->>UI: Speaks "28 packets and 3 damaged" (or "maggi 12" in batch)
+        Hook->>API: POST /api/voice/intake (or /parse) {draft:<awaiting draft>}
+        API-->>Hook: ParseResponse(status:"complete", draft:{received:28, damaged:3, usable:25, was_corrected:true})
     end
 ```
 

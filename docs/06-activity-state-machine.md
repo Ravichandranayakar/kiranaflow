@@ -22,8 +22,8 @@ stateDiagram-v2
     NEEDS_CLARIFICATION --> PROCESSING: Tap option pill / Submit text answer
     NEEDS_CLARIFICATION --> IDLE: Tap Cancel
 
-    AWAITING_CONFIRMATION --> LISTENING: Tap Mic to speak confirm/cancel/correction
-    AWAITING_CONFIRMATION --> PROCESSING: Tap Confirm & Save OR submit voice/text
+    AWAITING_CONFIRMATION --> LISTENING: Auto-opens 350ms after voice read-back OR tap inline mic pill
+    AWAITING_CONFIRMATION --> PROCESSING: Tap Confirm & Save OR submit "OK"/"Ya"/"Confirm"/edit
     AWAITING_CONFIRMATION --> AWAITING_CONFIRMATION: Inline Edit Details (local recalculation, was_corrected=true)
     AWAITING_CONFIRMATION --> IDLE: Tap Cancel entry
 
@@ -43,22 +43,22 @@ flowchart TD
     Empty -->|Yes| ErrResp(["status = error\nquestion_kind = noise"])
     Empty -->|No| WaitConf{"draft.awaiting_confirmation\n== true?"}
 
-    WaitConf -->|Yes| ConfirmKw{"Confirm keyword?\n(confirm/haan/sari/ok/save)"}
+    WaitConf -->|Yes| ConfirmKw{"Confirm keyword?\n(ok/ya/confirm/haan/houdu/sari/save)"}
     ConfirmKw -->|Yes| RetConfirm(["status = complete\naction = confirm"])
     ConfirmKw -->|No| CancelKw{"Cancel keyword?\n(cancel/no/nahi/beda)"}
     CancelKw -->|Yes| RetCancel(["status = complete\naction = cancel, reset draft"])
-    CancelKw -->|No| CorrTurn["Set was_corrected = true\nExtract updated damaged/received"]
+    CancelKw -->|No| CorrTurn["Set was_corrected = true\nUpdate single dual-qty or batch item"]
     CorrTurn --> CorrTeen{"Corrected received\nin TEEN_TENS_PAIRS?"}
     CorrTeen -->|Yes| RetTeenCorr(["status = clarify (teen_tens)"])
     CorrTeen -->|No| TryComplete
 
     WaitConf -->|No| PendingQ{"draft.pending_question_kind\nset?"}
-    PendingQ -->|Yes| MergeClar["_merge_clarification()\n(variant / teen_tens / damaged_qty / unknown_sku / noise)"]
+    PendingQ -->|Yes| MergeClar["_merge_clarification()\n(variant + 'both' / teen_tens / received_qty / damaged_qty / unknown_sku / noise)"]
     MergeClar --> TryComplete
 
     PendingQ -->|No| Step1["_apply_self_corrections()\nSlice numbers after last 'illa/no/actually'"]
     Step1 --> Step2["_extract_numbers() + _partition_damage()\n(digit near damage keyword within 30 chars)"]
-    Step2 --> Step3["_match_product() on FULL text\n(case-insensitive word/phrase aliases)"]
+    Step2 --> Step3["_match_product() on FULL text\n(3-tier: exact -> short brand token -> fuzzy >= 0.76)"]
     Step3 --> MatchCount{"matches count?"}
 
     MatchCount -->|"> 1 candidate"| RetVariant(["status = clarify\nquestion_kind = variant"])
@@ -84,7 +84,7 @@ flowchart TD
 |---------------|--------------------|
 | **Correction markers** | `illa`, `illa illa`, `no no`, `nahi`, `nahi nahi`, `actually`, `wait`, `sorry`, `correction`, `arbeider`, `not`, `i mean`, `matlab` |
 | **Damage keywords** | `damaged`, `damage`, `broken`, `leaky`, `leak`, `leaked`, `spoiled`, `spoilt`, `expired`, `torn`, `crushed`; **HI:** `kharab`, `toota`, `tuta`, `phoota`, `phuta`, `fataa`, `sadaa`; **KN:** `odada`, `odeda`, `haalada`, `tutela`, `ketalada` |
-| **Confirm / Cancel** | **Confirm:** `confirm`, `confirmed`, `yes`, `haan`, `ha`, `sari`, `seri`, `ok`, `okay`, `done`, `save`; **Cancel:** `cancel`, `cancelled`, `no`, `nahi`, `beda`, `bedi`, `skip`, `discard`, `chhodo` |
+| **Confirm / Cancel** | **Confirm:** `confirm`, `confirmed`, `conform`, `conformed`, `yes`, `ya`, `yeah`, `yep`, `yup`, `haan`, `ha`, `houdu`, `haudu`, `sari`, `seri`, `ok`, `okay`, `done`, `save`, `theek`, `thik`; **Cancel:** `cancel`, `cancelled`, `no`, `nahi`, `beda`, `bedi`, `skip`, `discard`, `chhodo`; **Multi-Select:** `both`, `all`, `dono`, `sab`, `eradu`, `ellavu` |
 | **Colloquial units** | `packet`/`pack`→`packets`, `peti`/`petis`/`crate`→`crates`, `kg`/`kilo`/`kilogram`→`kg`, `bottle`→`bottles`, `piece`→`pieces`, `darjan`/`darzen`/`dozen`→`dozens`, `patta`→`leaves`, `bag`, `tray`, `box` |
 | **Teen/Tens guard** | Bidirectional pairs: `13↔30`, `14↔40`, `15↔50`, `16↔60`, `17↔70`, `18↔80`, `19↔90` |
 | **Number words** | English (`zero`..`hundred` + common compounds), Hindi (`ek`..`sau`), Kannada (`ondu`..`nooru`) |

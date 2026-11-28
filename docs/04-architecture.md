@@ -116,8 +116,8 @@ flowchart LR
 | Config | `backend/app/config.py` | Loads `DATABASE_URL`, `CORS_ORIGINS`, `LLM_API_KEY`, `DEFAULT_LANGUAGE` |
 | ORM Models | `backend/app/models/db_models.py` | Defines `Product`, `ProductAlias`, and `StockMovement` |
 | API Schemas | `backend/app/models/schemas.py` | Pydantic v2 validation for `/api/voice/intake`, `/api/voice/parse`, `/api/deliveries/confirm*`, `/api/stock*` |
-| Deterministic Parser | `backend/app/services/parser.py` | Pure-Python single/multi-item extraction, self-correction, teen/tens & variant guards, slot filling |
+| Deterministic Parser | `backend/app/services/parser.py` | Pure-Python single/multi-item extraction, 3-tier short/fuzzy SKU match, `"both"` queuing, `received_qty`, self-correction, teen/tens & variant guards |
 | Seed & Catalogue | `backend/app/services/seed.py`, `catalogue_service.py` | Idempotently seeds 15 SKUs + opening stock, syncs aliases, and loads catalogue with eager joins |
 | Voice & Delivery Routes | `backend/app/routes/voice.py`, `delivery.py` | Offline Whisper transcription, single-hop intake, idempotency checks, atomic SQL updates, manual adjustments & SKU CRUD |
-| Frontend Flow Hook | `frontend/src/hooks/useDeliveryFlow.ts` | Finite state machine, `1.0s` post-speech VAD timer (`12.5 Hz`), `7s` no-voice cutoff, `isConfirmingRef` lock |
-| Speech Service | `frontend/src/services/speech.ts` | Cross-browser `MediaRecorder` (`pickRecordingFormat`), `speechSynthesis`, Web Audio start/success chimes |
+| Frontend Flow Hook | `frontend/src/hooks/useDeliveryFlow.ts` | Finite state machine, `1.0s` post-speech VAD timer (`12.5 Hz`), `350ms` post-TTS hands-free follow-up mic, `7s` no-voice cutoff, `isConfirmingRef` lock |
+| Speech & i18n | `frontend/src/services/speech.ts`, `i18n/translations.ts` | Cross-browser `MediaRecorder`, `onend`-aware `speechSynthesis`, `hasBrowserVoice()`, live midway read-backs & UI localization |

@@ -9,12 +9,12 @@
 ```text
 > python -m pytest backend/tests/ -v
 platform win32 -- Python 3.12.3, pytest-8.2.2, pluggy-1.5.0
-collected 37 items
+collected 42 items
 
-============================= 37 passed in 0.33s ==============================
+============================= 42 passed in 0.43s ==============================
 ```
 
-### Test Coverage Matrix (37 / 37 Passed)
+### Test Coverage Matrix (42 / 42 Passed)
 
 | Test Class | Count | Verified Behaviors |
 |------------|-------|--------------------|
@@ -25,7 +25,7 @@ collected 37 items
 | `TestConfirmCancel` | 6 | Spoken confirm in EN (`confirm`), HI (`haan`), KN (`sari`), `cancel`, live damage correction while awaiting, rejecting `confirm` outside `awaiting_confirmation` |
 | `TestCodeSwitching` | 3 | Hinglish (`"24 milk packets aaya 2 kharab"`), Kanglish (`"24 milk packets bandide 2 packets odada ide"`), complex `illa illa` + `leaky` |
 | `TestEdgeCases` | 6 | Empty transcript error, localized read-backs (EN/HI/KN), UUID `idempotency_key` presence, `damaged > received` guard |
-| `TestMultiItemParsing` | 4 | Multi-item parsing (`"1 kg onion and 4 kg daal"`), multi-item with `teen_tens` clarify (`"14 milk packets and 4 kg daal"`), single-item comma-damage guard, Whisper punctuation tolerance (`"4 kg daal."`, `"Confirm."`) |
+| `TestMultiItemParsing` | 9 | Multi-item (`"1 kg onion and 4 kg daal"`), missing `received_qty` queues (`"5 onion and maggi"`), `"both i told"` multi-SKU queuing, voice confirm variants (`"ok"`, `"O.K."`, `"ya confirm"`, `"conform"`, `"houdu"`), dual spoken edit (`"28 packets and 3 damaged"`), batch edit (`"maggi 12"`), and casual short/fuzzy names (`"5 magi"`, `"10 parle"`, `"5 fortune"`, `"5 nandhini"`, `"10 atta"` -> `variant`, `"1 kg of gold"` -> `unknown_sku`) |
 
 ---
 
@@ -55,6 +55,8 @@ Verified against running containers (`kiranaflow-db-1`, `kiranaflow-backend-1`, 
 | Idempotent retry (same key) | Second `confirm_delivery()` with same `idempotency_key` | Returned `"status": "duplicate"`, `movement_id: 5`, with `usable_stock` frozen at `84` and `damaged_stock` frozen at `4` (zero double-counting) |
 | Live API duplicate protection | `POST /api/deliveries/confirm` replaying existing DB key `3e6a0d15-55f9-4da2-999a-83c01ff63c55` | Returned `"status": "duplicate"`, `movement_id: 1`, `usable_stock: 62`, `damaged_stock: 2` |
 | Stock & SKU CRUD | `GET /api/stock`, `POST/DELETE /api/stock/products`, `POST /api/stock/adjust` | Returned 15 seeded SKUs; verified custom add (`409` on duplicate), `+`/`-` adjust (`400` negative guard), and clean delete |
+| Short/fuzzy SKU live check | `POST http://localhost:8085/api/voice/parse` | Verified `"5 magi"`, `"5 oil"`, `"10 parle"`, `"5 colget"`, `"5 nandhini"` resolve cleanly; `"10 atta"` prompts `variant` (`1kg` vs `5kg`); `"1 kg of gold"` blocks as `unknown_sku` |
+| Live UI i18n & Both E2E | Playwright on `http://localhost:8085` | Verified midway `E -> ಕ / हि` live read-back/badge translation, inline **Speak “OK / Confirm” or Edit** button, and `"tata salt maggi"` -> `"both i told"` -> batch confirm (`errors=[]`) |
 | Docker idle footprint | `docker stats --no-stream` | Backend `0.18%` CPU (`487.4 MiB` RAM incl. Whisper weights), Frontend `0.00%` CPU (`10.59 MiB`), Postgres `0.00%` CPU (`23.21 MiB`) |
 
 ---

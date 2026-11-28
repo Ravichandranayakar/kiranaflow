@@ -19,12 +19,14 @@
 ### Recording by Voice
 
 1. Tap the central circular **Tap to Speak** dial. A short start chime plays and the browser requests microphone permission on first run.
-2. Speak naturally in English, Hindi, Kannada, Hinglish, or Kanglish—for example:
+2. Speak naturally in English, Hindi, Kannada, Hinglish, or Kanglish—casual short brand names work too without reciting weights (`"70g"`/`"500ml"`):
    - `"24 milk packets bandide 2 odada ide"`
+   - `"5 magi"` / `"10 parle"` / `"5 oil"` / `"10 atta"`
    - `"10 cheeni 2 kharab"`
    - `"10 fortune oil illa illa 12 packets 1 leaky"`
    - `"1 kg onion and 4 kg daal"`
-3. **Automatic end detection:** Pause for `1.0 second` after finishing your sentence—KiranaFlow automatically stops recording and sends audio in one step to `/api/voice/intake` (offline Whisper transcription + deterministic parsing), or tap the square stop hub manually anytime.
+3. **Automatic end detection & hands-free follow-up:** Pause for `1.0 second` after finishing your sentence—KiranaFlow automatically stops recording and sends audio in one step to `/api/voice/intake`. After KiranaFlow finishes speaking its confirmation read-back (`350ms`), the mic automatically re-opens once so you can stay completely hands-free, or use the inline **Speak “OK / Confirm” or Edit** button directly on the card.
+4. **Decoupled language toggle (`E` / `हि` / `ಕ`):** Switch UI text, card badges, units, and read-backs anytime (even midway through a review card) without restricting mixed Hinglish/Kanglish spoken input.
 
 ### Using Text Fallback or Test Case Chips
 
@@ -35,16 +37,16 @@
 
 If anything is ambiguous, KiranaFlow pauses before saving and displays a focused **Quick Clarification** card:
 - **`14 or 40?` (`teen_tens`):** Tap `[14]` or `[40]`, or speak the number.
-- **Multiple brand matches (`variant`):** Tap the exact SKU row.
+- **Multiple matches (`variant`):** Tap one exact SKU row, tap **Select All / Both**, or say `"both"` to queue multiple items (`received_qty` quick pills guide missing counts).
 - **Missing damage count (`damaged_qty`):** Tap `0 (None)` or `1`–`5`, or speak the number.
-- **Unknown product (`unknown_sku`):** Tap one of the quick catalogue chips or restate the brand name.
+- **Unknown product (`unknown_sku`):** Tap one of the quick catalogue chips, restate the brand name, or add the SKU explicitly in **Stock -> `+ Add Item`**.
 
 ### Confirming Before Anything Saves
 
 When ready, the card highlights `+usable` units in lime green and speaks a localized read-back aloud:
-- **Save:** Tap **Confirm & Save**, or tap the mic and say `"Confirm"`, `"Haan"`, or `"Sari"`.
-- **Edit:** Tap **Edit details** to adjust `RECEIVED` and `DAMAGED` numbers directly, or speak a correction (e.g., `"actually 3 packets are damaged"`).
-- **Discard:** Tap **Cancel entry** or say `"Cancel"` / `"Beda"`.
+- **Save:** Simply say `"OK"`, `"Ya confirm"`, `"Confirm"`, `"Haan"`, `"Houdu"`, or `"Sari"` into the hands-free follow-up mic (or tap **Confirm & Save** / **Speak “OK / Confirm” or Edit**).
+- **Edit:** Say single or dual changes directly (`"28 packets and 3 damaged"` or `"maggi 12"` in a batch), or tap **Edit details**.
+- **Discard:** Say `"Cancel"` / `"Beda"` or tap **Cancel entry**.
 
 ---
 
