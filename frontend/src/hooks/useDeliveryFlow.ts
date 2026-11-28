@@ -31,8 +31,11 @@ import {
 } from '../services/speech';
 import {
   formatCommitSpeech,
+  formatCommitSpeechFallback,
   formatLocalizedQuestion,
+  formatLocalizedQuestionFallback,
   formatLocalizedReadback,
+  formatLocalizedReadbackFallback,
 } from '../i18n/translations';
 import {
   EMPTY_DRAFT,
@@ -170,7 +173,13 @@ export function useDeliveryFlow() {
 
         if (res.status === 'committed' || res.status === 'duplicate') {
           playTone('success');
-          speakText(formatCommitSpeech(entriesToCommit, langRef.current), langRef.current, isMuted);
+          speakText(
+            formatCommitSpeech(entriesToCommit, langRef.current),
+            langRef.current,
+            isMuted,
+            undefined,
+            formatCommitSpeechFallback(entriesToCommit, langRef.current),
+          );
           setLastCommitted({
             entry: entriesToCommit[0],
             entries: entriesToCommit,
@@ -231,9 +240,13 @@ export function useDeliveryFlow() {
           entries.length > 0
             ? formatLocalizedReadback(entries, langRef.current)
             : (res.readback_text ?? '');
-        if (spokenReadback) {
+        const fallbackReadback =
+          entries.length > 0
+            ? formatLocalizedReadbackFallback(entries, langRef.current)
+            : (res.readback_text ?? undefined);
+        if (spokenReadback || fallbackReadback) {
           speakText(
-            spokenReadback,
+            spokenReadback || fallbackReadback || '',
             langRef.current,
             isMuted,
             source === 'voice'
@@ -246,14 +259,16 @@ export function useDeliveryFlow() {
                   }
                 }
               : undefined,
+            fallbackReadback,
           );
         }
       } else if (res.status === 'clarify' || res.status === 'unknown') {
         setFlowState('NEEDS_CLARIFICATION');
         const spokenQ = formatLocalizedQuestion(res, res.draft, langRef.current);
-        if (spokenQ) {
+        const fallbackQ = formatLocalizedQuestionFallback(res, res.draft, langRef.current) ?? undefined;
+        if (spokenQ || fallbackQ) {
           speakText(
-            spokenQ,
+            spokenQ ?? fallbackQ ?? '',
             langRef.current,
             isMuted,
             source === 'voice' && res.status === 'clarify'
@@ -263,6 +278,7 @@ export function useDeliveryFlow() {
                   }
                 }
               : undefined,
+            fallbackQ,
           );
         }
       } else if (res.status === 'error') {

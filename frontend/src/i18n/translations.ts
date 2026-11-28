@@ -312,7 +312,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     customKeyActiveNote: 'Custom key entered locally (optional enhancement).',
     keyNotSetPrefix: 'Key not set',
     keyPlaceholder: 'Optional LLM_API_KEY (not required)',
-    noOsVoiceNote: 'This device/browser has no local voice pack for this language — read-back still updates cleanly on screen.',
+    noOsVoiceNote: 'No native regional voice pack in this browser — using phonetic voice fallback while keeping screen text in your language.',
     selectBothAllPrefix: 'Select All / Both',
     itemsWord: 'items',
     receivedPausedNote: 'Tap a quick quantity above, or speak/type the exact received count.',
@@ -471,7 +471,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     customKeyActiveNote: 'स्थानीय कस्टम कुंजी दर्ज है (वैकल्पिक)।',
     keyNotSetPrefix: 'कुंजी सेट नहीं है',
     keyPlaceholder: 'वैकल्पिक LLM_API_KEY (ज़रूरी नहीं)',
-    noOsVoiceNote: 'इस डिवाइस/ब्राउज़र में हिन्दी आवाज़ पैक उपलब्ध नहीं है — स्क्रीन पर पूरा पाठ हिन्दी में ही दिखेगा।',
+    noOsVoiceNote: 'ब्राउज़र में हिन्दी आवाज़ पैक न होने पर हिंग्लिश उच्चारण आवाज़ चल रही है — स्क्रीन पर पाठ हिन्दी में है।',
     selectBothAllPrefix: 'दोनों / सभी चुनें',
     itemsWord: 'आइटम',
     receivedPausedNote: 'ऊपर संख्या चुनें या प्राप्त गिनती बोलकर/लिखकर बताएं।',
@@ -630,7 +630,7 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     customKeyActiveNote: 'ಕಸ್ಟಮ್ ಕೀ ಸ್ಥಳೀಯವಾಗಿ ನೀಡಲಾಗಿದೆ (ಐಚ್ಛಿಕ).',
     keyNotSetPrefix: 'ಕೀ ಹೊಂದಿಸಲಾಗಿಲ್ಲ',
     keyPlaceholder: 'ಐಚ್ಛಿಕ LLM_API_KEY (ಅಗತ್ಯವಿಲ್ಲ)',
-    noOsVoiceNote: 'ಈ ಬ್ರೌಸರ್/ಸಾಧನದಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಇಲ್ಲ — ಆದರೆ ಪರದೆಯ ಮೇಲಿನ ಪಠ್ಯ ಸಂಪೂರ್ಣ ಕನ್ನಡದಲ್ಲೇ ಇರುತ್ತದೆ.',
+    noOsVoiceNote: 'ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಇಲ್ಲದ ಕಾರಣ ರೋಮನ್ ಧ್ವನಿ ಓದಲಾಗುತ್ತಿದೆ — ಪರದೆಯ ಪಠ್ಯ ಕನ್ನಡದಲ್ಲೇ ಇದೆ.',
     selectBothAllPrefix: 'ಎರಡನ್ನೂ / ಎಲ್ಲವನ್ನೂ ಆಯ್ಕೆಮಾಡಿ',
     itemsWord: 'ವಸ್ತುಗಳು',
     receivedPausedNote: 'ಮೇಲಿನ ಸಂಖ್ಯೆಯನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ ಅಥವಾ ಸ್ವೀಕರಿಸಿದ ಸಂಖ್ಯೆಯನ್ನು ಹೇಳಿ/ಟೈಪ್ ಮಾಡಿ.',
@@ -764,4 +764,95 @@ export function formatCommitSpeech(entries: PendingEntry[], lang: LangCode): str
   if (lang === 'hi') return `${usable} उपयोगी स्टॉक सहेजा गया। अगला सामान बोलें।`;
   if (lang === 'kn') return `${usable} ಬಳಸಬಹುದಾದ ದಾಸ್ತಾನು ಉಳಿಸಲಾಗಿದೆ. ಮುಂದಿನ ವಸ್ತು ಹೇಳಿ.`;
   return `Saved ${usable} usable. Next item?`;
+}
+
+/** Romanized fallback speech strings for browsers without local Hindi/Kannada voice packs. */
+export function formatLocalizedReadbackFallback(entries: PendingEntry[], lang: LangCode): string {
+  if (entries.length === 0) return '';
+  if (lang === 'en') return formatLocalizedReadback(entries, 'en');
+
+  if (entries.length === 1) {
+    const e = entries[0];
+    const u = e.unit || 'packets';
+    if (lang === 'hi') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name} mila, ${e.damaged} kharab, ${e.usable} upyog mein. Confirm karne ke liye Haan ya Confirm bolein.`
+        : `${e.received} ${u} ${e.product_name} mila, sab theek, ${e.usable} upyog mein. Confirm karne ke liye Haan ya Confirm bolein.`;
+    }
+    return e.damaged > 0
+      ? `${e.received} ${u} ${e.product_name} bandide, ${e.damaged} odada, ${e.usable} upayogakke. Save maadalu Sari athava Confirm heli.`
+      : `${e.received} ${u} ${e.product_name} bandide, ella sari ide, ${e.usable} upayogakke. Save maadalu Sari athava Confirm heli.`;
+  }
+
+  const parts = entries.map((e) => {
+    const u = e.unit || 'packets';
+    if (lang === 'hi') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name}, ${e.damaged} kharab, ${e.usable} upyogi`
+        : `${e.usable} ${u} ${e.product_name}`;
+    }
+    return e.damaged > 0
+      ? `${e.received} ${u} ${e.product_name}, ${e.damaged} odada, ${e.usable} upayoga`
+      : `${e.usable} ${u} ${e.product_name}`;
+  });
+  const joined = parts.join('; ');
+  if (lang === 'hi') {
+    return `${entries.length} items ready hain: ${joined}. Sab save karne ke liye Haan ya Confirm bolein.`;
+  }
+  return `${entries.length} items ready ide: ${joined}. Ella save maadalu Sari athava Confirm heli.`;
+}
+
+export function formatLocalizedQuestionFallback(
+  parseResult: ParseResponse,
+  draft: PendingDraft,
+  lang: LangCode,
+): string | null {
+  if (lang === 'en') return formatLocalizedQuestion(parseResult, draft, 'en');
+  const kind = parseResult.question_kind;
+  const itemFallback = lang === 'hi' ? 'is item' : 'ee item';
+  const name = draft.product_name ?? itemFallback;
+  const unitText = draft.unit || 'packets';
+
+  if (kind === 'teen_tens' && draft.teen_tens_options && draft.teen_tens_options.length >= 2) {
+    const [low, high] = [...draft.teen_tens_options].sort((a, b) => a - b);
+    return lang === 'hi'
+      ? `Aapne ${low} bola ya ${high}?`
+      : `Neevu ${low} heldira athava ${high}?`;
+  }
+  if (kind === 'variant' && parseResult.candidates && parseResult.candidates.length > 0) {
+    const sep = lang === 'hi' ? ' ya ' : ' athava ';
+    const names = parseResult.candidates.map((c) => c.product_name).join(sep);
+    return lang === 'hi' ? `Kaun sa chahiye: ${names}?` : `Neevu heliddu yaavudu: ${names}?`;
+  }
+  if (kind === 'received_qty') {
+    return lang === 'hi'
+      ? `${name} ke kitne ${unitText} mile?`
+      : `${name} eshtu ${unitText} bandide?`;
+  }
+  if (kind === 'damaged_qty') {
+    return lang === 'hi'
+      ? `${name} mein kitne kharab hain?`
+      : `${name} eshtu odada ide?`;
+  }
+  if (kind === 'unknown_sku') {
+    const raw = parseResult.raw_transcript ?? '';
+    return lang === 'hi'
+      ? `${raw} catalogue mein nahi mila. Brand ka naam phir bolein.`
+      : `${raw} pattiyalli sigalilla. Item hesaru matte heli.`;
+  }
+  return parseResult.question ?? formatLocalizedQuestion(parseResult, draft, 'en');
+}
+
+export function formatCommitSpeechFallback(entries: PendingEntry[], lang: LangCode): string {
+  if (lang === 'en') return formatCommitSpeech(entries, 'en');
+  if (entries.length > 1) {
+    const total = entries.reduce((sum, e) => sum + e.usable, 0);
+    return lang === 'hi'
+      ? `${entries.length} items, kul ${total} stock mein save ho gaye. Agla item bolein.`
+      : `${entries.length} items, ottu ${total} stock nalli save aagide. Mundina item heli.`;
+  }
+  const usable = entries[0]?.usable ?? 0;
+  return lang === 'hi'
+    ? `${usable} upyogi stock save ho gaya. Agla item bolein.`
+    : `${usable} upayogakke stock save aagide. Mundina item heli.`;
 }

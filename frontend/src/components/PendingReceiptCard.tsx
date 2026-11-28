@@ -5,6 +5,7 @@ import { speakText, hasBrowserVoice } from '../services/speech';
 import {
   formatLocalizedQuestion,
   formatLocalizedReadback,
+  formatLocalizedReadbackFallback,
   formatUnit,
   TRANSLATIONS,
 } from '../i18n/translations';
@@ -101,6 +102,10 @@ export function PendingReceiptCard({
     readbackEntries.length > 0
       ? formatLocalizedReadback(readbackEntries, lang)
       : (parseResult?.readback_text ?? '');
+  const readbackFallback =
+    readbackEntries.length > 0
+      ? formatLocalizedReadbackFallback(readbackEntries, lang)
+      : (parseResult?.readback_text ?? undefined);
   const browserHasVoice = lang === 'en' || hasBrowserVoice(lang);
   const isListeningFollowUp = flowState === 'LISTENING';
 
@@ -926,7 +931,7 @@ export function PendingReceiptCard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => speakText(localizedReadback, lang)}
+                  onClick={() => speakText(localizedReadback, lang, false, undefined, readbackFallback)}
                   aria-label="Replay read-back"
                   className="w-7 h-7 rounded-full bg-[#eae8e2] border border-[#dedad1] flex items-center justify-center text-[#1b1c18] hover:bg-[#dedad1] transition-colors"
                 >

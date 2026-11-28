@@ -72,11 +72,19 @@ export function pickRecordingFormat(): { mimeType: string; filename: string } {
 }
 
 let activeSpeakTimer: number | null = null;
+let speakDispatchTimer: number | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+let activeSpeakSeq = 0;
 
-function clearSpeakTimer() {
-  if (activeSpeakTimer !== null && typeof window !== 'undefined') {
+function clearSpeakTimers() {
+  if (typeof window === 'undefined') return;
+  if (activeSpeakTimer !== null) {
     window.clearTimeout(activeSpeakTimer);
     activeSpeakTimer = null;
+  }
+  if (speakDispatchTimer !== null) {
+    window.clearTimeout(speakDispatchTimer);
+    speakDispatchTimer = null;
   }
 }
 
@@ -85,67 +93,160 @@ export function speakText(
   lang: LangCode,
   muted = false,
   onDone?: () => void,
+  fallbackText?: string,
 ): void {
-  clearSpeakTimer();
+  const seq = ++activeSpeakSeq;
+  clearSpeakTimers();
   let completed = false;
+
   const finish = (delayMs = 0) => {
-    if (completed || !onDone || typeof window === 'undefined') return;
+    if (completed || seq !== activeSpeakSeq || !onDone || typeof window === 'undefined') return;
     completed = true;
+    clearSpeakTimers();
     if (delayMs > 0) {
       activeSpeakTimer = window.setTimeout(() => {
         activeSpeakTimer = null;
-        onDone();
+        if (seq === activeSpeakSeq) {
+          onDone();
+        }
       }, delayMs);
     } else {
       onDone();
     }
   };
 
-  if (muted || typeof window === 'undefined' || !('speechSynthesis' in window) || !text.trim()) {
+  const primaryTrimmed = text.trim();
+  const fallbackTrimmed = fallbackText?.trim() ?? '';
+  if (
+    muted ||
+    typeof window === 'undefined' ||
+    !('speechSynthesis' in window) ||
+    (!primaryTrimmed && !fallbackTrimmed)
+  ) {
     finish(150);
     return;
   }
 
   try {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const targetLocale = LANG_LOCALE_MAP[lang];
-    utterance.lang = targetLocale;
-    utterance.rate = 0.98;
-
+    const synth = window.speechSynthesis;
     const voices = refreshVoices();
+    const targetLocale = LANG_LOCALE_MAP[lang];
     const exactMatch = voices.find((v) => v.lang.toLowerCase() === targetLocale.toLowerCase());
     const prefixMatch = voices.find(
       (v) => v.lang.toLowerCase().startsWith(`${lang}-`) || v.lang.toLowerCase() === lang,
     );
-    if (exactMatch) {
-      utterance.voice = exactMatch;
-    } else if (prefixMatch) {
-      utterance.voice = prefixMatch;
-    } else if (lang !== 'en') {
-      // Avoid forcing non-Latin Unicode through an en-US/en-GB desktop voice that only reads English words
-      finish(250);
-      return;
-    }
+    const nativeVoice = exactMatch ?? prefixMatch ?? null;
+    const fallbackVoice =
+      voices.find((v) => v.lang.toLowerCase() === 'en-in') ??
+      voices.find((v) => v.lang.toLowerCase().startsWith('en-')) ??
+      voices.find((v) => v.default) ??
+      null;
 
-    if (onDone) {
-      utterance.onend = () => finish(350);
-      utterance.onerror = () => finish(250);
-      // Safety fallback in case browser TTS stalls without firing onend
-      activeSpeakTimer = window.setTimeout(() => finish(0), 9000);
-    }
+    // On devices without hi-IN/kn-IN OS voices, speak Romanized fallback via an English voice
+    const useNativeScript = lang === 'en' || nativeVoice !== null || !fallbackTrimmed;
+    const initialText = useNativeScript ? primaryTrimmed : fallbackTrimmed;
+    const initialVoice = useNativeScript ? (nativeVoice ?? fallbackVoice) : fallbackVoice;
+    const initialLocale = useNativeScript
+      ? (nativeVoice?.lang || targetLocale)
+      : (fallbackVoice?.lang || 'en-IN');
+    const canRetryFallback =
+      lang !== 'en' && useNativeScript && Boolean(fallbackTrimmed) && fallbackTrimmed !== primaryTrimmed;
 
-    window.speechSynthesis.speak(utterance);
+    const dispatchUtterance = (
+      spoken: string,
+      voice: SpeechSynthesisVoice | null,
+      utterLang: string,
+      allowFallbackRetry: boolean,
+    ) => {
+      if (seq !== activeSpeakSeq) return;
+      const startedAt = Date.now();
+      const utterance = new SpeechSynthesisUtterance(spoken);
+      utterance.lang = utterLang;
+      utterance.rate = 0.98;
+      if (voice) {
+        utterance.voice = voice;
+      }
+      // Keep a module reference so Chromium does not GC the utterance before onend
+      activeUtterance = utterance;
+
+      if (onDone) {
+        const initialWaitMs = Math.min(20000, Math.max(9000, spoken.length * 115));
+        const scheduleSafetyCheck = (waitMs: number) => {
+          if (activeSpeakTimer !== null) window.clearTimeout(activeSpeakTimer);
+          activeSpeakTimer = window.setTimeout(() => {
+            if (seq !== activeSpeakSeq) return;
+            if (synth.speaking || synth.pending) {
+              scheduleSafetyCheck(2500);
+              return;
+            }
+            finish(0);
+          }, waitMs);
+        };
+        scheduleSafetyCheck(initialWaitMs);
+      }
+
+      utterance.onend = () => {
+        if (seq !== activeSpeakSeq || activeUtterance !== utterance) return;
+        activeUtterance = null;
+        finish(400);
+      };
+
+      utterance.onerror = (event) => {
+        if (seq !== activeSpeakSeq || activeUtterance !== utterance) return;
+        activeUtterance = null;
+        const errCode = (event as { error?: string } | undefined)?.error;
+        if (errCode === 'canceled' || errCode === 'interrupted') {
+          clearSpeakTimers();
+          return;
+        }
+        if (allowFallbackRetry && fallbackTrimmed) {
+          dispatchUtterance(
+            fallbackTrimmed,
+            fallbackVoice,
+            fallbackVoice?.lang || 'en-IN',
+            false,
+          );
+          return;
+        }
+        if (onDone && Date.now() - startedAt > 350) {
+          finish(350);
+        } else {
+          clearSpeakTimers();
+        }
+      };
+
+      if (synth.paused) {
+        synth.resume();
+      }
+      synth.speak(utterance);
+    };
+
+    const startPrimary = () =>
+      dispatchUtterance(initialText, initialVoice, initialLocale, canRetryFallback);
+
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+      speakDispatchTimer = window.setTimeout(() => {
+        speakDispatchTimer = null;
+        startPrimary();
+      }, 60);
+    } else {
+      startPrimary();
+    }
   } catch {
-    finish(200);
+    clearSpeakTimers();
   }
 }
 
 export function stopSpeaking(): void {
-  clearSpeakTimer();
+  activeSpeakSeq += 1;
+  activeUtterance = null;
+  clearSpeakTimers();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
     } catch {
       // ignore
     }
