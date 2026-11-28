@@ -2,7 +2,7 @@
 
 **Voice-first delivery & inventory assistant for Indian kirana stores.**
 
-Built for the Scaler × Wispr Flow Hackathon (Round 2). KiranaFlow lets shopkeepers log supplier deliveries hands-free in **English, Hindi, Kannada, Hinglish, and Kanglish** while managing customers at the counter—separating **usable shelf stock** from **damaged items for supplier return**, catching ambiguous counts (`14` vs `40`) and mid-sentence self-corrections (`illa illa`), and **never writing to PostgreSQL until explicitly confirmed**.
+Built for the Scaler × Wispr Flow Hackathon (Round 2). KiranaFlow lets shopkeepers log supplier deliveries hands-free in **English, Hindi, Kannada, Hinglish, and Kanglish** while managing customers at the counter—separating **usable shelf stock** from **damaged items for supplier return**, catching ambiguous counts (`14` vs `40`) and mid-sentence self-corrections, and **never writing to PostgreSQL until explicitly confirmed**.
 
 ---
 
@@ -74,7 +74,7 @@ docker compose up --build
 
 - **Zero External API Keys:** Runs completely locally out of the box (`LLM_API_KEY=""` by default). All alias matching, number extraction, unit mapping (`petis`, `darjan`, `patta`), and state transitions run in deterministic Python ([parser.py](backend/app/services/parser.py)).
 - **Confirm-Before-Write Guard:** Spoken confirmation commands (`Confirm`, `Haan`, `Sari`) are ignored outside `awaiting_confirmation`. Nothing touches stock until explicitly confirmed.
-- **Mishearing & Correction Protection:** Flags teen/tens ambiguity (`13↔30` through `19↔90`) and resolves mid-sentence corrections (`illa illa`, `no no`, `actually`) while keeping the product name from the full sentence.
+- **Mishearing & Correction Protection:** Flags teen/tens ambiguity (`13↔30` through `19↔90`) and resolves mid-sentence self-corrections (e.g., `"actually"`, `"no no"`, `"nahi"`, or Kannada `"illa"`) while keeping the product name from the full sentence.
 - **Usable vs. Return Accounting:** Separates sellable `usable_stock` from supplier-claim `damaged_stock` across both `products` and immutable `stock_movements`.
 - **Race-Free & Idempotent Commits:** Uses SQL atomic increments (`usable_stock = usable_stock + delta`) and a `UNIQUE` UUID `idempotency_key` so retried requests never double-count.
 - **Reorder Drafts & Multilingual UI:** Instant header switching between English (`E`), Hindi (`हि`), and Kannada (`ಕ`), low-stock filtering, and one-click **Copy WhatsApp Reorder Draft** on the **Stock** tab.
