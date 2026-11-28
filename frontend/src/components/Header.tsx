@@ -1,4 +1,4 @@
-import { Settings, Store, User } from 'lucide-react';
+import { Store, User } from 'lucide-react';
 import type { LangCode } from '../types/api';
 
 interface HeaderProps {
@@ -72,12 +72,11 @@ export function Header({
         <button
           type="button"
           onClick={onOpenSettings}
-          title="Store Profile & Settings"
-          aria-label="Open settings"
-          className="px-1.5 py-1.5 rounded-lg bg-[#eae8e2] text-[#444748] hover:text-[#1b1c18] hover:bg-[#dedad1] flex items-center gap-1 transition-colors"
+          title="Store Profile"
+          aria-label="Open store profile"
+          className="p-1.5 rounded-lg bg-[#eae8e2] text-[#444748] hover:text-[#1b1c18] hover:bg-[#dedad1] flex items-center justify-center transition-colors"
         >
-          <User className="w-3.5 h-3.5" />
-          <Settings className="w-3.5 h-3.5 text-[#4b6700]" />
+          <User className="w-4 h-4" />
         </button>
       </div>
     </header>
