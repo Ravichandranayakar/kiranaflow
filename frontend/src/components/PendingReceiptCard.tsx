@@ -370,12 +370,18 @@ export function PendingReceiptCard({
   // COMMITTED state: Screen 6 Completed Entry Receipt (real ConfirmResponse, zero fake telemetry/images)
   if (flowState === 'COMMITTED' && lastCommitted) {
     const { entry: committedEntry } = lastCommitted;
+    const committedBatch =
+      lastCommitted.entries && lastCommitted.entries.length > 1 ? lastCommitted.entries : null;
+    const totalBatchUsable = committedBatch
+      ? committedBatch.reduce((sum, item) => sum + item.usable, 0)
+      : committedEntry.usable;
+
     return (
       <section className="px-5 -mt-4 relative z-10 space-y-3.5 pb-4">
         <div className="bg-white rounded-2xl border border-[#dedad1] shadow-sm overflow-hidden">
           <div className="bg-[#eae8e2] px-4 py-2.5 flex items-center justify-between border-b border-[#dedad1]">
             <span className="font-mono text-[10px] font-bold text-[#1b1c18] uppercase tracking-[0.08em]">
-              {t.completedEntry}
+              {committedBatch ? `${t.completedEntry} (${committedBatch.length})` : t.completedEntry}
             </span>
             <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider bg-[#c6f26a] text-[#141f00] uppercase">
               {t.committedBadge}
@@ -383,57 +389,83 @@ export function PendingReceiptCard({
           </div>
 
           <div className="p-4 space-y-3.5">
-            <h3 className="font-display text-lg font-bold text-[#1b1c18] tracking-tight">
-              {committedEntry.product_name}
-            </h3>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-[#faf9f5] border border-[#eae8e2] rounded-xl p-3">
-                <span className="font-mono text-[10px] font-semibold text-[#747878] uppercase block">
-                  {t.received}
-                </span>
-                <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="font-display text-xl font-bold text-[#1b1c18]">
-                    {committedEntry.received}
-                  </span>
-                  <span className="font-mono text-[10px] font-semibold text-[#747878] uppercase">
-                    {committedEntry.unit}
-                  </span>
-                </div>
+            {committedBatch ? (
+              <div className="space-y-2">
+                {committedBatch.map((item) => (
+                  <div
+                    key={item.idempotency_key}
+                    className="bg-[#faf9f5] border border-[#eae8e2] rounded-xl px-3 py-2.5 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-display text-sm font-bold text-[#1b1c18] truncate">
+                        {item.product_name}
+                      </p>
+                      <p className="text-[11px] text-[#747878]">
+                        {item.received} {item.unit} received
+                        {item.damaged > 0 ? ` • ${item.damaged} damaged` : ''}
+                      </p>
+                    </div>
+                    <span className="font-display text-sm font-extrabold text-[#39734c] shrink-0">
+                      +{item.usable} {item.unit}
+                    </span>
+                  </div>
+                ))}
               </div>
+            ) : (
+              <>
+                <h3 className="font-display text-lg font-bold text-[#1b1c18] tracking-tight">
+                  {committedEntry.product_name}
+                </h3>
 
-              <div
-                className={`rounded-xl p-3 border ${
-                  committedEntry.damaged > 0
-                    ? 'bg-[#ffefeb] border-[#f3cecb]'
-                    : 'bg-[#faf9f5] border-[#eae8e2]'
-                }`}
-              >
-                <span
-                  className={`font-mono text-[10px] font-semibold uppercase block ${
-                    committedEntry.damaged > 0 ? 'text-[#b54a42]' : 'text-[#747878]'
-                  }`}
-                >
-                  {t.damaged}
-                </span>
-                <div className="mt-1 flex items-baseline gap-1.5">
-                  <span
-                    className={`font-display text-xl font-bold ${
-                      committedEntry.damaged > 0 ? 'text-[#b54a42]' : 'text-[#444748]'
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="bg-[#faf9f5] border border-[#eae8e2] rounded-xl p-3">
+                    <span className="font-mono text-[10px] font-semibold text-[#747878] uppercase block">
+                      {t.received}
+                    </span>
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span className="font-display text-xl font-bold text-[#1b1c18]">
+                        {committedEntry.received}
+                      </span>
+                      <span className="font-mono text-[10px] font-semibold text-[#747878] uppercase">
+                        {committedEntry.unit}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`rounded-xl p-3 border ${
+                      committedEntry.damaged > 0
+                        ? 'bg-[#ffefeb] border-[#f3cecb]'
+                        : 'bg-[#faf9f5] border-[#eae8e2]'
                     }`}
                   >
-                    {formatTwoDigits(committedEntry.damaged)}
-                  </span>
-                  <span
-                    className={`font-mono text-[10px] font-semibold uppercase ${
-                      committedEntry.damaged > 0 ? 'text-[#b54a42]/80' : 'text-[#747878]'
-                    }`}
-                  >
-                    {committedEntry.unit}
-                  </span>
+                    <span
+                      className={`font-mono text-[10px] font-semibold uppercase block ${
+                        committedEntry.damaged > 0 ? 'text-[#b54a42]' : 'text-[#747878]'
+                      }`}
+                    >
+                      {t.damaged}
+                    </span>
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span
+                        className={`font-display text-xl font-bold ${
+                          committedEntry.damaged > 0 ? 'text-[#b54a42]' : 'text-[#444748]'
+                        }`}
+                      >
+                        {formatTwoDigits(committedEntry.damaged)}
+                      </span>
+                      <span
+                        className={`font-mono text-[10px] font-semibold uppercase ${
+                          committedEntry.damaged > 0 ? 'text-[#b54a42]/80' : 'text-[#747878]'
+                        }`}
+                      >
+                        {committedEntry.unit}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
 
             <div className="bg-[#c6f26a] rounded-xl p-3.5 text-[#141f00] space-y-1">
               <span className="font-mono text-[10px] font-bold uppercase tracking-wider block">
@@ -441,10 +473,10 @@ export function PendingReceiptCard({
               </span>
               <div className="flex items-baseline gap-2">
                 <span className="font-display text-3xl font-extrabold leading-none">
-                  +{committedEntry.usable}
+                  +{totalBatchUsable}
                 </span>
                 <span className="font-mono text-xs font-bold uppercase">
-                  {committedEntry.unit}
+                  {committedBatch ? 'total units' : committedEntry.unit}
                 </span>
               </div>
               <p className="text-[11px] text-[#141f00]/80 pt-1">
@@ -521,6 +553,9 @@ export function PendingReceiptCard({
   const isAwaitingConfirm =
     flowState === 'AWAITING_CONFIRMATION' && draft.awaiting_confirmation;
 
+  const multiEntries =
+    parseResult?.entries && parseResult.entries.length > 1 ? parseResult.entries : null;
+
   const handleSaveEdit = () => {
     const rec = Number.parseInt(editReceived, 10);
     const dmg = Number.parseInt(editDamaged || '0', 10);
@@ -548,17 +583,28 @@ export function PendingReceiptCard({
 
         <div className="px-4 py-3.5 flex flex-col gap-3">
           {/* Matched Product Pill */}
-          {productName && (
+          {multiEntries ? (
             <div className="flex items-center justify-between gap-2 pb-1 border-b border-[#eae8e2]">
-              <span className="font-display text-xs font-semibold text-[#1b1c18] truncate">
-                {productName}
+              <span className="font-display text-xs font-semibold text-[#1b1c18]">
+                {multiEntries.length} Delivery Items
               </span>
-              {unit && (
-                <span className="font-display text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#f5f3ed] text-[#444748] shrink-0">
-                  {unit}
-                </span>
-              )}
+              <span className="font-display text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#c6f26a] text-[#141f00] font-bold shrink-0">
+                BATCH
+              </span>
             </div>
+          ) : (
+            productName && (
+              <div className="flex items-center justify-between gap-2 pb-1 border-b border-[#eae8e2]">
+                <span className="font-display text-xs font-semibold text-[#1b1c18] truncate">
+                  {productName}
+                </span>
+                {unit && (
+                  <span className="font-display text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#f5f3ed] text-[#444748] shrink-0">
+                    {unit}
+                  </span>
+                )}
+              </div>
+            )
           )}
 
           {/* Spoken / Typed Utterance */}
@@ -666,6 +712,39 @@ export function PendingReceiptCard({
                 >
                   {t.cancel}
                 </button>
+              </div>
+            </div>
+          ) : multiEntries ? (
+            <div className="space-y-2.5 pt-0.5">
+              <div className="space-y-2">
+                {multiEntries.map((item, idx) => (
+                  <div
+                    key={item.idempotency_key}
+                    className="bg-[#faf9f5] border border-[#dedad1] rounded-xl px-3 py-2.5 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-display text-xs font-bold text-[#1b1c18] truncate">
+                        {idx + 1}. {item.product_name}
+                      </p>
+                      <p className="text-[11px] text-[#444748]">
+                        {item.received} {item.unit} received
+                        {item.damaged > 0 ? ` • ${item.damaged} damaged` : ''}
+                      </p>
+                    </div>
+                    <span className="font-display text-sm font-extrabold text-[#141f00] bg-[#c6f26a] px-2.5 py-1 rounded-lg shrink-0">
+                      +{item.usable} {item.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-[#c6f26a] border border-[#b6e455] rounded-xl p-3 text-center">
+                <span className="block font-display text-[10px] font-bold text-[#141f00] uppercase tracking-wider">
+                  {t.usableToAdd} ({multiEntries.length} ITEMS)
+                </span>
+                <div className="font-display text-2xl font-extrabold text-[#141f00] leading-tight">
+                  +{multiEntries.reduce((sum, i) => sum + i.usable, 0)} total units
+                </div>
+                <p className="text-[11px] text-[#141f00]/80 pt-0.5">{t.usableNote}</p>
               </div>
             </div>
           ) : (
@@ -788,7 +867,7 @@ export function PendingReceiptCard({
                 ) : (
                   <>
                     <Check className="w-4 h-4 stroke-[2.5]" />
-                    {t.confirmAndSave}
+                    {multiEntries ? `${t.confirmAndSave} (${multiEntries.length})` : t.confirmAndSave}
                   </>
                 )}
               </button>
@@ -798,15 +877,17 @@ export function PendingReceiptCard({
                 <span className="text-[11px] text-[#444748]">{t.confirmHintVoice}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="py-2.5 px-3 rounded-xl bg-white border border-[#dedad1] text-[#1b1c18] font-display text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[#f5f3ed] transition-colors"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  {t.editDetails}
-                </button>
+              <div className={`grid ${multiEntries ? 'grid-cols-1' : 'grid-cols-2'} gap-2 pt-0.5`}>
+                {!multiEntries && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="py-2.5 px-3 rounded-xl bg-white border border-[#dedad1] text-[#1b1c18] font-display text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[#f5f3ed] transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    {t.editDetails}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onCancel}

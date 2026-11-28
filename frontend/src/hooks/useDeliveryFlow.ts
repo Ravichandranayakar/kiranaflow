@@ -11,7 +11,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  adjustStock,
   confirmDelivery,
+  confirmDeliveryBatch,
   fetchHealth,
   fetchMovements,
   fetchStock,
@@ -27,6 +29,7 @@ import {
 } from '../services/speech';
 import {
   EMPTY_DRAFT,
+  type ConfirmBatchResponse,
   type ConfirmResponse,
   type FlowState,
   type HealthResponse,
@@ -41,7 +44,8 @@ import {
 
 export interface CommittedReceipt {
   entry: PendingEntry;
-  response: ConfirmResponse;
+  entries?: PendingEntry[];
+  response: ConfirmResponse | ConfirmBatchResponse;
 }
 
 export interface ToastNotice {
@@ -132,31 +136,48 @@ export function useDeliveryFlow() {
     };
   }, []);
 
-  const commitEntry = useCallback(
+  const commitEntries = useCallback(
     async (
-      entryToCommit: PendingEntry,
+      entriesToCommit: PendingEntry[],
       rawText: string,
       sourceUsed: InputSource,
       wasCorrected: boolean,
     ) => {
+      if (entriesToCommit.length === 0) return;
       setFlowState('PROCESSING');
       try {
-        const res = await confirmDelivery({
-          entry: entryToCommit,
-          raw_transcript: rawText,
-          lang: langRef.current,
-          source: sourceUsed,
-          was_corrected: wasCorrected,
-        });
+        const res =
+          entriesToCommit.length > 1
+            ? await confirmDeliveryBatch({
+                entries: entriesToCommit,
+                raw_transcript: rawText,
+                lang: langRef.current,
+                source: sourceUsed,
+                was_corrected: wasCorrected,
+              })
+            : await confirmDelivery({
+                entry: entriesToCommit[0],
+                raw_transcript: rawText,
+                lang: langRef.current,
+                source: sourceUsed,
+                was_corrected: wasCorrected,
+              });
 
         if (res.status === 'committed' || res.status === 'duplicate') {
           playTone('success');
+          const totalUsable = entriesToCommit.reduce((sum, e) => sum + e.usable, 0);
           speakText(
-            `Saved ${entryToCommit.usable} usable. Next item?`,
+            entriesToCommit.length > 1
+              ? `Saved ${entriesToCommit.length} items, ${totalUsable} total usable. Next item?`
+              : `Saved ${entriesToCommit[0].usable} usable. Next item?`,
             langRef.current,
             isMuted,
           );
-          setLastCommitted({ entry: entryToCommit, response: res });
+          setLastCommitted({
+            entry: entriesToCommit[0],
+            entries: entriesToCommit,
+            response: res,
+          });
           setFlowState('COMMITTED');
           setDraft(EMPTY_DRAFT);
           setParseResult(null);
@@ -200,7 +221,9 @@ export function useDeliveryFlow() {
 
         // Spoken confirm/cancel only accepted when backend detects it during awaiting_confirmation
         if (res.action === 'confirm' && res.entry) {
-          await commitEntry(res.entry, cleaned, source, res.draft.was_corrected);
+          const toCommit =
+            res.entries && res.entries.length > 0 ? res.entries : [res.entry];
+          await commitEntries(toCommit, cleaned, source, res.draft.was_corrected);
           return;
         }
 
@@ -236,22 +259,55 @@ export function useDeliveryFlow() {
         showToast('error', msg);
       }
     },
-    [commitEntry, isMuted, showToast],
+    [commitEntries, isMuted, showToast],
   );
 
   const confirmCurrentDraft = useCallback(async () => {
     if (isConfirmingRef.current) return;
-    const entry = parseResult?.entry ?? buildEntryFromDraft(draft);
-    if (!entry) return;
+    const singleFallback = parseResult?.entry ?? buildEntryFromDraft(draft);
+    const toCommit =
+      parseResult?.entries && parseResult.entries.length > 0
+        ? parseResult.entries
+        : singleFallback
+          ? [singleFallback]
+          : [];
+    if (toCommit.length === 0) return;
     isConfirmingRef.current = true;
     setIsConfirming(true);
     try {
-      await commitEntry(entry, transcript, lastSource, draft.was_corrected);
+      await commitEntries(toCommit, transcript, lastSource, draft.was_corrected);
     } finally {
       isConfirmingRef.current = false;
       setIsConfirming(false);
     }
-  }, [buildEntryFromDraft, commitEntry, draft, lastSource, parseResult, transcript]);
+  }, [buildEntryFromDraft, commitEntries, draft, lastSource, parseResult, transcript]);
+
+  const adjustStockItem = useCallback(
+    async (
+      productId: number,
+      usableDelta: number,
+      damagedDelta: number,
+      reason: string,
+    ): Promise<boolean> => {
+      try {
+        const res = await adjustStock({
+          product_id: productId,
+          usable_delta: usableDelta,
+          damaged_delta: damagedDelta,
+          reason: reason.trim() || 'Manual stock adjustment',
+        });
+        playTone('success');
+        showToast('success', res.message);
+        await refreshData();
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to adjust stock';
+        showToast('error', msg);
+        return false;
+      }
+    },
+    [refreshData, showToast],
+  );
 
   const cancelCurrentDraft = useCallback(() => {
     stopSpeaking();
@@ -530,6 +586,7 @@ export function useDeliveryFlow() {
     cancelCurrentDraft,
     resetToIdle,
     adjustDraftQuantities,
+    adjustStockItem,
     refreshData,
   };
 }

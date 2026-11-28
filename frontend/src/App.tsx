@@ -40,6 +40,7 @@ function KiranaFlowShell() {
     cancelCurrentDraft,
     resetToIdle,
     adjustDraftQuantities,
+    adjustStockItem,
   } = useDeliveryFlow();
 
   return (
@@ -113,7 +114,12 @@ function KiranaFlowShell() {
           )}
 
           {activeTab === 'stock' && (
-            <StockView items={stockItems} lowStockCount={lowStockCount} lang={lang} />
+            <StockView
+              items={stockItems}
+              lowStockCount={lowStockCount}
+              lang={lang}
+              onAdjustStock={adjustStockItem}
+            />
           )}
 
           {activeTab === 'history' && <HistoryView movements={movements} lang={lang} />}

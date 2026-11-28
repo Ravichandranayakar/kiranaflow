@@ -41,6 +41,8 @@ export interface PendingDraft {
   pending_question_kind: string | null;
   candidates: Candidate[] | null;
   teen_tens_options: number[] | null;
+  queued_clauses?: string[] | null;
+  queued_entries?: PendingEntry[] | null;
 }
 
 export interface PendingEntry {
@@ -63,6 +65,7 @@ export interface ParseRequest {
 export interface ParseResponse {
   status: 'complete' | 'clarify' | 'unknown' | 'error';
   entry: PendingEntry | null;
+  entries?: PendingEntry[] | null;
   question: string | null;
   question_kind: string | null;
   candidates: Candidate[] | null;
@@ -87,6 +90,37 @@ export interface ConfirmResponse {
   product_name: string | null;
   usable_stock: number | null;
   damaged_stock: number | null;
+}
+
+export interface ConfirmBatchRequest {
+  entries: PendingEntry[];
+  raw_transcript: string;
+  lang: LangCode;
+  source: InputSource;
+  was_corrected: boolean;
+}
+
+export interface ConfirmBatchResponse {
+  status: 'committed' | 'duplicate' | 'error';
+  message: string;
+  results: ConfirmResponse[];
+}
+
+export interface StockAdjustRequest {
+  product_id: number;
+  usable_delta: number;
+  damaged_delta: number;
+  reason: string;
+}
+
+export interface StockAdjustResponse {
+  status: 'adjusted' | 'error';
+  message: string;
+  product_id: number;
+  product_name: string;
+  usable_stock: number;
+  damaged_stock: number;
+  movement_id: number;
 }
 
 export interface StockItem {

@@ -215,6 +215,13 @@ Atomically updates `products` (`usable_stock` & `damaged_stock`) and inserts an 
 
 ---
 
+## 3b. `POST /api/deliveries/confirm-batch` & `POST /api/stock/adjust`
+
+- **`POST /api/deliveries/confirm-batch`**: Accepts `{ entries: PendingEntry[], raw_transcript, lang, source, was_corrected }` and commits all items from a multi-item utterance (`"1 kg onion and 4 kg daal"`) inside one atomic PostgreSQL transaction.
+- **`POST /api/stock/adjust`**: Accepts `{ product_id, usable_delta, damaged_delta, reason }` (`+` adds stock, `-` subtracts stock). Rejects negative resulting stock with `400` and writes an immutable `stock_movements` audit entry (`source: "manual"`).
+
+---
+
 ## 4. `GET /api/stock`
 
 Returns all seeded SKUs ordered by `(category, name)` plus `low_stock_count`.

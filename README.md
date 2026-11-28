@@ -151,7 +151,7 @@ docker compose up --build
 | **Health Check** | [http://localhost:8080/api/health](http://localhost:8080/api/health) | Verifies live `SELECT 1` DB connection and active parser mode |
 | **Local Vite Dev** | [http://localhost:5173](http://localhost:5173) | Optional dev mode via `cd frontend && npm install && npm run dev` |
 
-> **Voice & Offline Fallback:** Browser voice recognition uses Chrome's Web Speech API (`en-IN` / `hi-IN` / `kn-IN`) with WebRTC noise suppression and automatic `1.5s` silence stop. Every flow also works offline or in any browser via **Or type instead** and the 5 one-tap **Try a test case** chips.
+> **Voice & Offline Fallback:** Browser voice recognition uses Chrome's Web Speech API (`en-IN` / `hi-IN` / `kn-IN`) with WebRTC noise suppression and automatic `1.5s` silence stop. Every flow also works offline or in any browser via **Or type instead** and the 6 one-tap **Try a test case** chips.
 
 ---
 
@@ -174,6 +174,7 @@ docker compose up --build
 | `"14 milk packets"` | Triggers `teen_tens` guard → asks `"Did you say 14 or 40?"` |
 | `"10 fortune oil illa illa 12 packets 1 leaky"` | `Fortune Sunflower Oil 1L` → drops `10`, keeps `12` received, `1` damaged |
 | `"10 cheeni 2 kharab"` | `Loose Sugar 1kg` → `10` received, `2` damaged, `+8` usable |
+| `"1 kg onion and 4 kg daal"` | Parses **2 items** (`Onion 1kg: +1`, `Toor Dal 1kg: +4`) for batch confirm |
 | `"10 packets amul butter"` | Returns `unknown_sku` without modifying catalogue or stock |
 
 ---
@@ -183,8 +184,10 @@ docker compose up --build
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | `GET` | `/api/health` | PostgreSQL connectivity check (`SELECT 1`) and parser status |
-| `POST` | `/api/voice/parse` | Parse utterance against 15 seeded SKUs and echo full `PendingDraft` |
+| `POST` | `/api/voice/parse` | Parse single- or multi-item utterance against 15 seeded SKUs |
 | `POST` | `/api/deliveries/confirm` | Atomically commit confirmed entry and enforce `idempotency_key` |
+| `POST` | `/api/deliveries/confirm-batch` | Atomically commit multi-item delivery entries in one transaction |
+| `POST` | `/api/stock/adjust` | Manually add/subtract `usable_stock` or `damaged_stock` with audit log |
 | `GET` | `/api/stock` | Return current `usable_stock`, `damaged_stock`, and `is_low` status |
 | `GET` | `/api/stock/movements` | Return immutable chronological delivery audit log |
 
@@ -197,7 +200,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 33 passed in 0.36s
+# 36 passed in 0.31s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit

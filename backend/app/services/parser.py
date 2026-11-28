@@ -118,6 +118,125 @@ TEEN_TENS_PAIRS = {
 }
 
 
+MULTI_SPLIT_RE = re.compile(
+    r"(?:,|&|\+|(?:\band\b)|(?:\baur\b)|(?:\bmattu\b)|(?:\bplus\b))"
+)
+
+
+def _has_correction_marker(text_lower: str) -> bool:
+    return any(re.search(r"\b" + re.escape(m) + r"\b", text_lower) for m in CORRECTION_MARKERS)
+
+
+def _split_multi_clauses(text_lower: str, catalogue: List[Dict]) -> Optional[List[str]]:
+    """
+    Split a sentence into independent product clauses only when 2+ clauses
+    each contain both a product match and a quantity (across 2+ distinct SKUs).
+    Never splits single-item damage lists ('24 milk packets, 2 damaged') or
+    self-corrections ('10 oil illa illa 12 oil').
+    """
+    if _has_correction_marker(text_lower):
+        return None
+    raw_parts = [p.strip() for p in MULTI_SPLIT_RE.split(text_lower) if p.strip()]
+    if len(raw_parts) < 2:
+        return None
+
+    matched_ids = set()
+    valid_clauses: List[str] = []
+    for part in raw_parts:
+        part_matches = _match_product(part, catalogue)
+        part_nums = _extract_numbers(part)
+        if part_matches and part_nums:
+            valid_clauses.append(part)
+            for m in part_matches:
+                matched_ids.add(m["id"])
+        else:
+            # A fragment like '2 damaged' without a product means this is a single-item utterance
+            return None
+
+    if len(valid_clauses) >= 2 and len(matched_ids) >= 2:
+        return valid_clauses
+    return None
+
+
+def _format_multi_readback(entries: List[PendingEntry], lang: str) -> str:
+    """Format a clear read-back summary across multiple parsed items."""
+    parts = []
+    for e in entries:
+        if e.damaged > 0:
+            parts.append(f"{e.received} {e.unit} {e.product_name} ({e.damaged} damaged, {e.usable} usable)")
+        else:
+            parts.append(f"{e.usable} {e.unit} {e.product_name}")
+    joined = "; ".join(parts)
+    if lang == "hi":
+        return f"{len(entries)} item tayyar hain: {joined}. Sab save karne ke liye 'Haan' bolein."
+    if lang == "kn":
+        return f"{len(entries)} vasthugalu siddhavide: {joined}. Ellavannu ulisalu 'Sari' heli."
+    return f"{len(entries)} items ready: {joined}. Say Confirm to save all, or review below."
+
+
+def _finalize_multi_queue(
+    completed: List[PendingEntry],
+    remaining_clauses: List[str],
+    catalogue: List[Dict],
+    lang: str,
+    transcript: str,
+) -> ParseResponse:
+    """
+    Continue resolving remaining multi-item clauses until all complete or one
+    needs clarification.
+    """
+    collected = list(completed)
+    queue = list(remaining_clauses)
+
+    while queue:
+        next_clause = queue.pop(0)
+        res = _parse_single_turn(next_clause, PendingDraft(), catalogue, lang)
+        if res.status == "complete" and res.entry is not None:
+            collected.append(res.entry)
+            continue
+
+        # Pause on this clause for clarification while preserving progress
+        paused_draft = res.draft.model_copy()
+        paused_draft.queued_entries = collected or None
+        paused_draft.queued_clauses = queue or None
+        return ParseResponse(
+            status=res.status,
+            entry=res.entry,
+            entries=collected or None,
+            question=res.question,
+            question_kind=res.question_kind,
+            candidates=res.candidates,
+            draft=paused_draft,
+            readback_text=res.readback_text,
+            raw_transcript=transcript,
+        )
+
+    first = collected[0]
+    summary_draft = PendingDraft(
+        product_id=first.product_id,
+        product_name=first.product_name,
+        received=first.received,
+        damaged=first.damaged,
+        usable=first.usable,
+        unit=first.unit,
+        awaiting_confirmation=True,
+        idempotency_key=first.idempotency_key,
+        queued_entries=collected if len(collected) > 1 else None,
+    )
+    return ParseResponse(
+        status="complete",
+        entry=first,
+        entries=collected,
+        draft=summary_draft,
+        readback_text=(
+            _format_multi_readback(collected, lang)
+            if len(collected) > 1
+            else _format_readback(summary_draft, lang)
+        ),
+        raw_transcript=transcript,
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -130,16 +249,7 @@ def parse_transcript(
 ) -> ParseResponse:
     """
     Main entry point. Takes raw transcript + current draft state and returns
-    the next ParseResponse.
-
-    Args:
-        transcript: Raw spoken/typed text from the shopkeeper.
-        draft: Current PendingDraft state (empty on first turn).
-        catalogue: List of dicts with keys: id, name, aliases (list of str), default_unit.
-        lang: Selected language code.
-
-    Returns:
-        ParseResponse with updated draft, possible question, or complete entry.
+    the next ParseResponse. Supports both single-item and multi-item utterances.
     """
     text = transcript.strip()
     text_lower = text.lower()
@@ -154,6 +264,24 @@ def parse_transcript(
     # ── Step 0b: Handle clarification response if one is pending ──────────
     if draft.pending_question_kind:
         return _merge_clarification(text_lower, draft, catalogue, lang)
+
+    # ── Step 0c: Multi-item delivery sentence detection ───────────────────
+    multi_clauses = _split_multi_clauses(text_lower, catalogue)
+    if multi_clauses:
+        return _finalize_multi_queue([], multi_clauses, catalogue, lang, transcript)
+
+    return _parse_single_turn(transcript, draft, catalogue, lang)
+
+
+def _parse_single_turn(
+    transcript: str,
+    draft: PendingDraft,
+    catalogue: List[Dict],
+    lang: str = "en",
+) -> ParseResponse:
+    """Parse a single delivery item clause against the catalogue."""
+    text = transcript.strip()
+    text_lower = text.lower()
 
     # ── Step 1: Apply self-corrections ──────────────────────────────────
     # For numbers/damage: use corrected text (after last "illa"/"no"/"actually")
@@ -385,9 +513,9 @@ def _merge_clarification(
     elif kind == "noise":
         # Re-parse fresh from the corrected input
         new_draft.pending_question_kind = None
-        return parse_transcript(text_lower, new_draft, catalogue, lang)
+        return _parse_single_turn(text_lower, new_draft, catalogue, lang)
 
-    return _try_complete(new_draft, text_lower, lang)
+    return _try_complete(new_draft, text_lower, lang, catalogue)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -415,20 +543,27 @@ def _handle_confirmation_turn(
 
     # Check for confirm
     if words & CONFIRM_KEYWORDS:
+        batch = draft.queued_entries if draft.queued_entries else None
+        primary = PendingEntry(
+            product_id=draft.product_id,  # type: ignore
+            product_name=draft.product_name,  # type: ignore
+            received=draft.received,  # type: ignore
+            damaged=draft.damaged or 0,
+            usable=draft.usable,  # type: ignore
+            unit=draft.unit or "packets",
+            idempotency_key=draft.idempotency_key,  # type: ignore
+        )
         return ParseResponse(
             status="complete",
             action="confirm",
-            entry=PendingEntry(
-                product_id=draft.product_id,  # type: ignore
-                product_name=draft.product_name,  # type: ignore
-                received=draft.received,  # type: ignore
-                damaged=draft.damaged or 0,
-                usable=draft.usable,  # type: ignore
-                unit=draft.unit or "packets",
-                idempotency_key=draft.idempotency_key,  # type: ignore
-            ),
+            entry=primary,
+            entries=batch,
             draft=draft,
-            readback_text=_format_readback(draft, lang),
+            readback_text=(
+                _format_multi_readback(batch, lang)
+                if batch and len(batch) > 1
+                else _format_readback(draft, lang)
+            ),
             raw_transcript=text_lower,
         )
 
@@ -685,10 +820,16 @@ def _resolve_variant(
     return None
 
 
-def _try_complete(draft: PendingDraft, transcript: str, lang: str) -> ParseResponse:
+def _try_complete(
+    draft: PendingDraft,
+    transcript: str,
+    lang: str,
+    catalogue: Optional[List[Dict]] = None,
+) -> ParseResponse:
     """
-    Check if all required fields are filled. If yes, set awaiting_confirmation.
-    If not, ask for the first missing field.
+    Check if all required fields are filled. If yes, set awaiting_confirmation
+    (or advance any remaining queued multi-item clauses). If not, ask for the
+    first missing field.
     """
     new_draft = draft.model_copy()
 
@@ -738,21 +879,31 @@ def _try_complete(draft: PendingDraft, transcript: str, lang: str) -> ParseRespo
     if new_draft.unit is None:
         new_draft.unit = "packets"
 
+    entry = PendingEntry(
+        product_id=new_draft.product_id,  # type: ignore
+        product_name=new_draft.product_name,  # type: ignore
+        received=new_draft.received,
+        damaged=new_draft.damaged,
+        usable=new_draft.usable,
+        unit=new_draft.unit,
+        idempotency_key=new_draft.idempotency_key,  # type: ignore
+    )
+
+    # If clarifying part of a multi-item delivery, resume remaining clauses
+    if (new_draft.queued_clauses or new_draft.queued_entries) and catalogue is not None:
+        prior = list(new_draft.queued_entries or [])
+        prior.append(entry)
+        remaining = list(new_draft.queued_clauses or [])
+        return _finalize_multi_queue(prior, remaining, catalogue, lang, transcript)
+
     # Set awaiting confirmation
     new_draft.awaiting_confirmation = True
     readback = _format_readback(new_draft, lang)
 
     return ParseResponse(
         status="complete",
-        entry=PendingEntry(
-            product_id=new_draft.product_id,  # type: ignore
-            product_name=new_draft.product_name,  # type: ignore
-            received=new_draft.received,
-            damaged=new_draft.damaged,
-            usable=new_draft.usable,
-            unit=new_draft.unit,
-            idempotency_key=new_draft.idempotency_key,  # type: ignore
-        ),
+        entry=entry,
+        entries=[entry],
         draft=new_draft,
         readback_text=readback,
         raw_transcript=transcript,

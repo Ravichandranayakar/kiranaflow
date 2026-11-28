@@ -9,12 +9,12 @@
 ```text
 > python -m pytest backend/tests/ -v
 platform win32 -- Python 3.12.3, pytest-8.2.2, pluggy-1.5.0
-collected 33 items
+collected 36 items
 
-============================= 33 passed in 0.36s ==============================
+============================= 36 passed in 0.31s ==============================
 ```
 
-### Test Coverage Matrix (33 / 33 Passed)
+### Test Coverage Matrix (36 / 36 Passed)
 
 | Test Class | Count | Verified Behaviors |
 |------------|-------|--------------------|
@@ -25,6 +25,7 @@ collected 33 items
 | `TestConfirmCancel` | 6 | Spoken confirm in EN (`confirm`), HI (`haan`), KN (`sari`), `cancel`, live damage correction while awaiting, rejecting `confirm` outside `awaiting_confirmation` |
 | `TestCodeSwitching` | 3 | Hinglish (`"24 milk packets aaya 2 kharab"`), Kanglish (`"24 milk packets bandide 2 packets odada ide"`), complex `illa illa` + `leaky` |
 | `TestEdgeCases` | 6 | Empty transcript error, localized read-backs (EN/HI/KN), UUID `idempotency_key` presence, `damaged > received` guard |
+| `TestMultiItemParsing` | 3 | Multi-item parsing (`"1 kg onion and 4 kg daal"`), multi-item with `teen_tens` clarify (`"14 milk packets and 4 kg daal"`), single-item comma-damage guard |
 
 ---
 

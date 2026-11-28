@@ -54,6 +54,15 @@ const EXAMPLES: ExampleItem[] = [
     },
     transcript: '10 cheeni 2 kharab',
   },
+  {
+    id: 'multi',
+    label: {
+      en: '2 items at once',
+      hi: 'एक साथ 2 सामान',
+      kn: 'ಒಟ್ಟಿಗೆ 2 ವಸ್ತುಗಳು',
+    },
+    transcript: '1 kg onion and 4 kg daal',
+  },
 ];
 
 interface ExampleStripProps {

@@ -5,6 +5,12 @@ POST /api/deliveries/confirm
   Atomically commits a confirmed delivery entry to stock.
   Uses idempotency_key so retries never double-count.
 
+POST /api/deliveries/confirm-batch
+  Atomically commits all entries from a multi-item delivery in one transaction.
+
+POST /api/stock/adjust
+  Manually adds or subtracts usable_stock / damaged_stock with audit log.
+
 GET /api/stock
   Returns current stock summary for all products.
 
@@ -14,6 +20,7 @@ GET /api/stock/movements
 
 from __future__ import annotations
 
+import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,9 +30,14 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models.db_models import Product, StockMovement
 from app.models.schemas import (
+    ConfirmBatchRequest,
+    ConfirmBatchResponse,
     ConfirmRequest,
     ConfirmResponse,
     MovementRecord,
+    PendingEntry,
+    StockAdjustRequest,
+    StockAdjustResponse,
     StockItem,
     StockSummaryResponse,
 )
@@ -33,22 +45,15 @@ from app.models.schemas import (
 router = APIRouter(prefix="/api", tags=["deliveries", "stock"])
 
 
-# ── POST /api/deliveries/confirm ─────────────────────────────────────────────
-
-@router.post("/deliveries/confirm", response_model=ConfirmResponse)
-def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> ConfirmResponse:
-    """
-    Atomically commit a confirmed delivery entry.
-
-    Reviewer fix #5: Uses atomic UPDATE ... SET usable_stock = usable_stock + delta,
-    never read-modify-write.
-
-    Idempotency: If the idempotency_key already exists in stock_movements,
-    return the existing record instead of inserting again (safe retry).
-    """
-    entry = req.entry
-
-    # ── Idempotency check ─────────────────────────────────────────────────
+def _commit_single_entry(
+    db: Session,
+    entry: PendingEntry,
+    raw_transcript: str,
+    lang: str,
+    source: str,
+    was_corrected: bool,
+) -> ConfirmResponse:
+    """Commit one PendingEntry idempotently with atomic SQL stock increments."""
     existing = (
         db.query(StockMovement)
         .filter(StockMovement.idempotency_key == entry.idempotency_key)
@@ -65,12 +70,10 @@ def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> Conf
             damaged_stock=product.damaged_stock if product else None,
         )
 
-    # ── Validate product exists ───────────────────────────────────────────
     product = db.query(Product).filter(Product.id == entry.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail=f"Product ID {entry.product_id} not found.")
 
-    # ── Validate quantities ───────────────────────────────────────────────
     if entry.damaged > entry.received:
         raise HTTPException(
             status_code=400,
@@ -79,7 +82,6 @@ def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> Conf
 
     usable_delta = entry.received - entry.damaged
 
-    # ── Atomic stock update (Reviewer fix #5) ─────────────────────────────
     db.execute(
         update(Product)
         .where(Product.id == entry.product_id)
@@ -89,22 +91,19 @@ def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> Conf
         )
     )
 
-    # ── Insert movement record ────────────────────────────────────────────
     movement = StockMovement(
         product_id=entry.product_id,
         idempotency_key=entry.idempotency_key,
         received=entry.received,
         damaged=entry.damaged,
         usable_delta=usable_delta,
-        raw_transcript=req.raw_transcript,
-        lang=req.lang,
-        source=req.source,
-        was_corrected=req.was_corrected,
+        raw_transcript=raw_transcript,
+        lang=lang,
+        source=source,
+        was_corrected=was_corrected,
     )
     db.add(movement)
     db.flush()
-
-    # Refresh product to get updated stock counts
     db.refresh(product)
 
     return ConfirmResponse(
@@ -115,6 +114,112 @@ def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> Conf
         product_name=product.name,
         usable_stock=product.usable_stock,
         damaged_stock=product.damaged_stock,
+    )
+
+
+# ── POST /api/deliveries/confirm ─────────────────────────────────────────────
+
+@router.post("/deliveries/confirm", response_model=ConfirmResponse)
+def confirm_delivery(req: ConfirmRequest, db: Session = Depends(get_db)) -> ConfirmResponse:
+    """Atomically commit a single confirmed delivery entry."""
+    return _commit_single_entry(
+        db=db,
+        entry=req.entry,
+        raw_transcript=req.raw_transcript,
+        lang=req.lang,
+        source=req.source,
+        was_corrected=req.was_corrected,
+    )
+
+
+# ── POST /api/deliveries/confirm-batch ───────────────────────────────────────
+
+@router.post("/deliveries/confirm-batch", response_model=ConfirmBatchResponse)
+def confirm_delivery_batch(req: ConfirmBatchRequest, db: Session = Depends(get_db)) -> ConfirmBatchResponse:
+    """Atomically commit multiple delivery entries in a single database transaction."""
+    results: List[ConfirmResponse] = []
+    for entry in req.entries:
+        res = _commit_single_entry(
+            db=db,
+            entry=entry,
+            raw_transcript=req.raw_transcript,
+            lang=req.lang,
+            source=req.source,
+            was_corrected=req.was_corrected,
+        )
+        results.append(res)
+
+    all_dup = all(r.status == "duplicate" for r in results)
+    summary = ", ".join(r.product_name for r in results if r.product_name)
+    return ConfirmBatchResponse(
+        status="duplicate" if all_dup else "committed",
+        message=(
+            "All items were already saved (safe retry)."
+            if all_dup
+            else f"Saved {len(results)} items: {summary}."
+        ),
+        results=results,
+    )
+
+
+# ── POST /api/stock/adjust ───────────────────────────────────────────────────
+
+@router.post("/stock/adjust", response_model=StockAdjustResponse)
+def adjust_stock(req: StockAdjustRequest, db: Session = Depends(get_db)) -> StockAdjustResponse:
+    """
+    Atomically add or subtract usable_stock / damaged_stock and record an audit row.
+    Prevents negative shelf balances while leaving maximum stock unrestricted.
+    """
+    if req.usable_delta == 0 and req.damaged_delta == 0:
+        raise HTTPException(status_code=400, detail="No stock change requested.")
+
+    product = db.query(Product).filter(Product.id == req.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product ID {req.product_id} not found.")
+
+    if product.usable_stock + req.usable_delta < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot subtract {-req.usable_delta}; only {product.usable_stock} usable in stock.",
+        )
+    if product.damaged_stock + req.damaged_delta < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot subtract {-req.damaged_delta}; only {product.damaged_stock} damaged in stock.",
+        )
+
+    db.execute(
+        update(Product)
+        .where(Product.id == req.product_id)
+        .values(
+            usable_stock=Product.usable_stock + req.usable_delta,
+            damaged_stock=Product.damaged_stock + req.damaged_delta,
+        )
+    )
+
+    movement = StockMovement(
+        product_id=req.product_id,
+        idempotency_key=str(uuid.uuid4()),
+        received=max(0, req.usable_delta) + max(0, req.damaged_delta),
+        damaged=max(0, req.damaged_delta),
+        usable_delta=req.usable_delta,
+        raw_transcript=req.reason,
+        lang="en",
+        source="manual",
+        was_corrected=False,
+    )
+    db.add(movement)
+    db.flush()
+    db.refresh(product)
+
+    return StockAdjustResponse(
+        status="adjusted",
+        message=f"Updated {product.name}: usable={product.usable_stock}, return={product.damaged_stock}.",
+        product_id=product.id,
+        product_name=product.name,
+        usable_stock=product.usable_stock,
+        damaged_stock=product.damaged_stock,
+        movement_id=movement.id,
     )
 
 

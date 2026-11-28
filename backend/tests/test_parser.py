@@ -63,7 +63,7 @@ TEST_CATALOGUE = [
     {
         "id": 7,
         "name": "Toor Dal 1kg",
-        "aliases": ["toor dal", "tur dal", "arhar dal", "dal", "togari bele", "bele"],
+        "aliases": ["toor dal", "tur dal", "arhar dal", "dal", "daal", "togari bele", "bele"],
         "default_unit": "kg",
         "category": "pulses",
     },
@@ -80,6 +80,13 @@ TEST_CATALOGUE = [
         "aliases": ["eggs", "egg", "anda", "ande", "motte"],
         "default_unit": "dozens",
         "category": "dairy",
+    },
+    {
+        "id": 10,
+        "name": "Onion 1kg",
+        "aliases": ["onion", "onions", "pyaaz", "eerulli"],
+        "default_unit": "kg",
+        "category": "produce",
     },
 ]
 
@@ -422,3 +429,40 @@ class TestEdgeCases:
         )
         # Simulate: parser receives "10" as damage for received=5
         # Should be caught in _try_complete
+
+
+class TestMultiItemParsing:
+    """Test parsing multiple products spoken in one delivery sentence."""
+
+    def test_multi_item_onion_and_daal(self):
+        """'1 kg onion and 4 kg daal' → parses BOTH items cleanly"""
+        result = parse_transcript("1 kg onion and 4 kg daal", PendingDraft(), TEST_CATALOGUE, "en")
+        assert result.status == "complete"
+        assert result.entries is not None
+        assert len(result.entries) == 2
+        assert result.entries[0].product_name == "Onion 1kg"
+        assert result.entries[0].usable == 1
+        assert result.entries[1].product_name == "Toor Dal 1kg"
+        assert result.entries[1].usable == 4
+
+    def test_multi_item_with_clarification(self):
+        """'14 milk packets and 4 kg daal' → clarifies 14/40 then returns both"""
+        turn1 = parse_transcript("14 milk packets and 4 kg daal", PendingDraft(), TEST_CATALOGUE, "en")
+        assert turn1.status == "clarify"
+        assert turn1.question_kind == "teen_tens"
+        turn2 = parse_transcript("40", turn1.draft, TEST_CATALOGUE, "en")
+        assert turn2.status == "complete"
+        assert turn2.entries is not None
+        assert len(turn2.entries) == 2
+        assert turn2.entries[0].received == 40
+        assert turn2.entries[1].product_name == "Toor Dal 1kg"
+        assert turn2.entries[1].usable == 4
+
+    def test_comma_damage_stays_single_item(self):
+        """'24 milk packets, 2 damaged' stays single item"""
+        result = parse_transcript("24 milk packets, 2 damaged", PendingDraft(), TEST_CATALOGUE, "en")
+        assert result.status == "complete"
+        assert result.entries is None or len(result.entries) == 1
+        assert result.draft.received == 24
+        assert result.draft.damaged == 2
+        assert result.draft.usable == 22

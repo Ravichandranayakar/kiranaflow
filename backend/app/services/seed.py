@@ -21,10 +21,11 @@ from app.models.db_models import Product, ProductAlias
 logger = logging.getLogger(__name__)
 
 # ── Seed catalogue ────────────────────────────────────────────────────────────
-# Format: (name, category, default_unit, min_threshold, aliases_by_lang)
+# Format: (name, category, default_unit, min_threshold, initial_usable, aliases_by_lang)
+# Fresh shops start with realistic shelf inventory; 4 SKUs intentionally sit below threshold for reorder testing.
 SEED_CATALOGUE = [
     (
-        "Nandini Toned Milk 500ml", "dairy", "packets", 10,
+        "Nandini Toned Milk 500ml", "dairy", "packets", 10, 18,
         {
             "en": ["milk", "nandini milk", "nandini", "toned milk", "nandini blue"],
             "hi": ["doodh", "dudh", "nandini doodh"],
@@ -32,7 +33,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Loose Sugar 1kg", "staples", "kg", 5,
+        "Loose Sugar 1kg", "staples", "kg", 5, 8,
         {
             "en": ["sugar", "loose sugar"],
             "hi": ["cheeni", "shakkar", "chini"],
@@ -40,7 +41,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Aashirvaad Atta 1kg", "staples", "packets", 5,
+        "Aashirvaad Atta 1kg", "staples", "packets", 5, 3,
         {
             "en": ["aashirvaad 1kg", "aashirvaad atta 1kg", "atta 1kg", "aashirvaad small"],
             "hi": ["aashirvaad atta chhota", "atta chhota"],
@@ -48,7 +49,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Aashirvaad Atta 5kg", "staples", "packets", 3,
+        "Aashirvaad Atta 5kg", "staples", "packets", 3, 6,
         {
             "en": ["aashirvaad 5kg", "aashirvaad atta 5kg", "atta 5kg", "aashirvaad big"],
             "hi": ["aashirvaad atta bada", "atta bada"],
@@ -56,7 +57,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Parle-G Biscuit Small", "snacks", "packets", 20,
+        "Parle-G Biscuit Small", "snacks", "packets", 20, 28,
         {
             "en": ["parle g", "parle-g", "parle g chota", "parle g small", "parle biscuit"],
             "hi": ["parle g chhota", "parle biscuit"],
@@ -64,7 +65,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Fortune Sunflower Oil 1L", "oil", "bottles", 5,
+        "Fortune Sunflower Oil 1L", "oil", "bottles", 5, 3,
         {
             "en": ["fortune oil", "sunflower oil", "fortune sunflower", "cooking oil"],
             "hi": ["fortune tel", "tel", "surajmukhi tel"],
@@ -72,7 +73,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Toor Dal 1kg", "pulses", "kg", 5,
+        "Toor Dal 1kg", "pulses", "kg", 5, 7,
         {
             "en": ["toor dal", "tur dal", "arhar dal", "dal", "daal"],
             "hi": ["toor dal", "arhar dal", "dal", "daal"],
@@ -80,7 +81,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Tata Salt 1kg", "staples", "packets", 5,
+        "Tata Salt 1kg", "staples", "packets", 5, 12,
         {
             "en": ["tata salt", "salt", "iodised salt", "namak"],
             "hi": ["namak", "tata namak"],
@@ -88,7 +89,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Colgate Toothpaste 100g", "personal care", "pieces", 5,
+        "Colgate Toothpaste 100g", "personal care", "pieces", 5, 9,
         {
             "en": ["colgate", "toothpaste", "colgate 100g"],
             "hi": ["colgate", "toothpaste"],
@@ -96,7 +97,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Maggi Noodles 70g", "instant food", "packets", 15,
+        "Maggi Noodles 70g", "instant food", "packets", 15, 10,
         {
             "en": ["maggi", "maggi noodles", "noodles"],
             "hi": ["maggi", "noodles"],
@@ -104,7 +105,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Daawat Basmati Rice 1kg", "staples", "kg", 5,
+        "Daawat Basmati Rice 1kg", "staples", "kg", 5, 9,
         {
             "en": ["basmati rice", "rice", "daawat rice", "basmati"],
             "hi": ["chawal", "basmati chawal", "daawat chawal"],
@@ -112,7 +113,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Onion 1kg", "produce", "kg", 10,
+        "Onion 1kg", "produce", "kg", 10, 14,
         {
             "en": ["onion", "onions"],
             "hi": ["pyaaz", "pyaj", "kanda"],
@@ -120,7 +121,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Potato 1kg", "produce", "kg", 10,
+        "Potato 1kg", "produce", "kg", 10, 6,
         {
             "en": ["potato", "potatoes", "aloo"],
             "hi": ["aloo", "aaloo"],
@@ -128,7 +129,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Eggs (12 pack)", "dairy", "dozens", 5,
+        "Eggs (12 pack)", "dairy", "dozens", 5, 7,
         {
             "en": ["eggs", "egg", "anda", "egg tray"],
             "hi": ["anda", "ande"],
@@ -136,7 +137,7 @@ SEED_CATALOGUE = [
         },
     ),
     (
-        "Surf Excel Detergent 500g", "cleaning", "packets", 5,
+        "Surf Excel Detergent 500g", "cleaning", "packets", 5, 8,
         {
             "en": ["surf excel", "surf", "detergent", "washing powder"],
             "hi": ["surf excel", "surf", "dhulai powder"],
@@ -161,7 +162,7 @@ def seed_catalogue(db: Session) -> None:
     added_products = 0
     added_aliases = 0
 
-    for name, category, default_unit, min_threshold, aliases_by_lang in SEED_CATALOGUE:
+    for name, category, default_unit, min_threshold, initial_usable, aliases_by_lang in SEED_CATALOGUE:
         product = existing_products.get(name)
         if product is None:
             product = Product(
@@ -169,7 +170,7 @@ def seed_catalogue(db: Session) -> None:
                 category=category,
                 default_unit=default_unit,
                 min_threshold=min_threshold,
-                usable_stock=0,
+                usable_stock=initial_usable,
                 damaged_stock=0,
             )
             db.add(product)

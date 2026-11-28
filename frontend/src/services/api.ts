@@ -4,12 +4,16 @@
  */
 
 import type {
+  ConfirmBatchRequest,
+  ConfirmBatchResponse,
   ConfirmRequest,
   ConfirmResponse,
   HealthResponse,
   MovementRecord,
   ParseRequest,
   ParseResponse,
+  StockAdjustRequest,
+  StockAdjustResponse,
   StockSummaryResponse,
 } from '../types/api';
 
@@ -51,6 +55,20 @@ export function parseVoice(payload: ParseRequest): Promise<ParseResponse> {
 
 export function confirmDelivery(payload: ConfirmRequest): Promise<ConfirmResponse> {
   return requestJson<ConfirmResponse>('/api/deliveries/confirm', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function confirmDeliveryBatch(payload: ConfirmBatchRequest): Promise<ConfirmBatchResponse> {
+  return requestJson<ConfirmBatchResponse>('/api/deliveries/confirm-batch', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function adjustStock(payload: StockAdjustRequest): Promise<StockAdjustResponse> {
+  return requestJson<StockAdjustResponse>('/api/stock/adjust', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

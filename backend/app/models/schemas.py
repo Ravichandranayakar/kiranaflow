@@ -48,6 +48,8 @@ class PendingDraft(BaseModel):
     pending_question_kind: Optional[str] = None  # variant | teen_tens | damaged_qty | unknown_sku | noise
     candidates: Optional[List[Candidate]] = None  # for variant disambiguation
     teen_tens_options: Optional[List[int]] = None   # e.g. [14, 40]
+    queued_clauses: Optional[List[str]] = None      # remaining multi-item clauses pending after clarify
+    queued_entries: Optional[List["PendingEntry"]] = None  # resolved entries in a multi-item turn
 
 
 # ── Completed Entry (ready for /confirm) ─────────────────────────────────────
@@ -88,9 +90,11 @@ class ParseResponse(BaseModel):
     Reviewer fix #4: `draft` is ALWAYS populated — frontend renders it as-is.
     Enhancement: `action` detects confirm/cancel spoken commands so the
     frontend never interprets voice input itself.
+    Multi-item: `entries` holds 2+ parsed items when spoken in one turn.
     """
     status: Literal["complete", "clarify", "unknown", "error"]
     entry: Optional[PendingEntry] = None           # populated when status == "complete"
+    entries: Optional[List[PendingEntry]] = None   # populated for multi-item deliveries
     question: Optional[str] = None                  # the one short question to ask/speak
     question_kind: Optional[str] = None             # variant | teen_tens | damaged_qty | unknown_sku | noise
     candidates: Optional[List[Candidate]] = None    # tap-to-pick list for variant ambiguity
@@ -119,6 +123,41 @@ class ConfirmResponse(BaseModel):
     product_name: Optional[str] = None
     usable_stock: Optional[int] = None
     damaged_stock: Optional[int] = None
+
+
+class ConfirmBatchRequest(BaseModel):
+    """Frontend sends this when confirming a multi-item delivery."""
+    entries: List[PendingEntry] = Field(..., min_length=1)
+    raw_transcript: str = ""
+    lang: Literal["en", "hi", "kn"] = "en"
+    source: Literal["voice", "text", "demo"] = "voice"
+    was_corrected: bool = False
+
+
+class ConfirmBatchResponse(BaseModel):
+    """Aggregated response for multi-item delivery commits."""
+    status: Literal["committed", "duplicate", "error"]
+    message: str
+    results: List[ConfirmResponse]
+
+
+class StockAdjustRequest(BaseModel):
+    """Add, subtract, or update shelf stock / supplier returns manually."""
+    product_id: int
+    usable_delta: int = 0
+    damaged_delta: int = 0
+    reason: str = Field(default="Manual stock adjustment", max_length=300)
+
+
+class StockAdjustResponse(BaseModel):
+    """Response after an atomic manual stock adjustment."""
+    status: Literal["adjusted", "error"]
+    message: str
+    product_id: int
+    product_name: str
+    usable_stock: int
+    damaged_stock: int
+    movement_id: int
 
 
 # ── Stock / Inventory Queries ────────────────────────────────────────────────
