@@ -123,6 +123,27 @@ export interface StockAdjustResponse {
   movement_id: number;
 }
 
+export interface ProductCreateRequest {
+  name: string;
+  category: string;
+  default_unit: string;
+  usable_stock: number;
+  min_threshold: number;
+  aliases: string[];
+}
+
+export interface ProductCreateResponse {
+  status: 'created' | 'error';
+  message: string;
+  item: StockItem;
+}
+
+export interface ProductDeleteResponse {
+  status: 'deleted' | 'error';
+  message: string;
+  product_id: number;
+}
+
 export interface StockItem {
   product_id: number;
   product_name: string;

@@ -12,6 +12,9 @@ import type {
   MovementRecord,
   ParseRequest,
   ParseResponse,
+  ProductCreateRequest,
+  ProductCreateResponse,
+  ProductDeleteResponse,
   StockAdjustRequest,
   StockAdjustResponse,
   StockSummaryResponse,
@@ -124,6 +127,19 @@ export function adjustStock(payload: StockAdjustRequest): Promise<StockAdjustRes
   return requestJson<StockAdjustResponse>('/api/stock/adjust', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export function createProduct(payload: ProductCreateRequest): Promise<ProductCreateResponse> {
+  return requestJson<ProductCreateResponse>('/api/stock/products', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteProduct(productId: number): Promise<ProductDeleteResponse> {
+  return requestJson<ProductDeleteResponse>(`/api/stock/products/${productId}`, {
+    method: 'DELETE',
   });
 }
 

@@ -14,6 +14,8 @@ import {
   adjustStock,
   confirmDelivery,
   confirmDeliveryBatch,
+  createProduct,
+  deleteProduct,
   fetchHealth,
   fetchMovements,
   fetchStock,
@@ -311,6 +313,53 @@ export function useDeliveryFlow() {
         return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to adjust stock';
+        showToast('error', msg);
+        return false;
+      }
+    },
+    [refreshData, showToast],
+  );
+
+  const addCatalogProduct = useCallback(
+    async (
+      name: string,
+      category: string,
+      defaultUnit: string,
+      usableStock: number,
+      minThreshold: number,
+      aliases: string[],
+    ): Promise<boolean> => {
+      try {
+        const res = await createProduct({
+          name,
+          category,
+          default_unit: defaultUnit,
+          usable_stock: usableStock,
+          min_threshold: minThreshold,
+          aliases,
+        });
+        playTone('success');
+        showToast('success', res.message);
+        await refreshData();
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to add product';
+        showToast('error', msg);
+        return false;
+      }
+    },
+    [refreshData, showToast],
+  );
+
+  const removeCatalogProduct = useCallback(
+    async (productId: number): Promise<boolean> => {
+      try {
+        const res = await deleteProduct(productId);
+        showToast('warning', res.message);
+        await refreshData();
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to delete product';
         showToast('error', msg);
         return false;
       }
@@ -635,6 +684,8 @@ export function useDeliveryFlow() {
     resetToIdle,
     adjustDraftQuantities,
     adjustStockItem,
+    addCatalogProduct,
+    removeCatalogProduct,
     refreshData,
   };
 }

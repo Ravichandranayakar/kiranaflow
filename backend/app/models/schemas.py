@@ -160,6 +160,30 @@ class StockAdjustResponse(BaseModel):
     movement_id: int
 
 
+class ProductCreateRequest(BaseModel):
+    """Create a new grocery SKU with optional spoken aliases."""
+    name: str = Field(..., min_length=2, max_length=200)
+    category: str = Field(default="general", min_length=1, max_length=100)
+    default_unit: str = Field(default="packets", min_length=1, max_length=50)
+    usable_stock: int = Field(default=0, ge=0)
+    min_threshold: int = Field(default=5, ge=0)
+    aliases: List[str] = Field(default_factory=list)
+
+
+class ProductCreateResponse(BaseModel):
+    """Response after adding a new SKU to the catalogue."""
+    status: Literal["created", "error"]
+    message: str
+    item: StockItem
+
+
+class ProductDeleteResponse(BaseModel):
+    """Response after deleting a SKU from the catalogue."""
+    status: Literal["deleted", "error"]
+    message: str
+    product_id: int
+
+
 # ── Stock / Inventory Queries ────────────────────────────────────────────────
 
 class StockItem(BaseModel):

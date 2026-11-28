@@ -340,7 +340,7 @@ export function PendingReceiptCard({
           {isUnknownSku && stockItems.length > 0 && (
             <div className="space-y-2 pt-1">
               <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                {stockItems.slice(0, 8).map((item) => (
+                {stockItems.map((item) => (
                   <button
                     key={item.product_id}
                     type="button"

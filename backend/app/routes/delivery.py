@@ -24,11 +24,11 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import update
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
-from app.models.db_models import Product, StockMovement
+from app.models.db_models import Product, ProductAlias, StockMovement
 from app.models.schemas import (
     ConfirmBatchRequest,
     ConfirmBatchResponse,
@@ -36,6 +36,9 @@ from app.models.schemas import (
     ConfirmResponse,
     MovementRecord,
     PendingEntry,
+    ProductCreateRequest,
+    ProductCreateResponse,
+    ProductDeleteResponse,
     StockAdjustRequest,
     StockAdjustResponse,
     StockItem,
@@ -220,6 +223,96 @@ def adjust_stock(req: StockAdjustRequest, db: Session = Depends(get_db)) -> Stoc
         usable_stock=product.usable_stock,
         damaged_stock=product.damaged_stock,
         movement_id=movement.id,
+    )
+
+
+# ── POST /api/stock/products ─────────────────────────────────────────────────
+
+@router.post("/stock/products", response_model=ProductCreateResponse)
+def create_product(req: ProductCreateRequest, db: Session = Depends(get_db)) -> ProductCreateResponse:
+    """Explicitly add a new SKU and voice aliases to the shop catalogue."""
+    clean_name = req.name.strip()
+    existing = db.query(Product).filter(func.lower(Product.name) == clean_name.lower()).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"'{clean_name}' is already in your catalogue.")
+
+    product = Product(
+        name=clean_name,
+        category=req.category.strip().lower() or "general",
+        default_unit=req.default_unit.strip().lower() or "packets",
+        min_threshold=req.min_threshold,
+        usable_stock=req.usable_stock,
+        damaged_stock=0,
+    )
+    db.add(product)
+    db.flush()
+
+    candidate_aliases = {clean_name.lower()}
+    for raw_alias in req.aliases:
+        cleaned = raw_alias.strip().lower()
+        if cleaned:
+            candidate_aliases.add(cleaned)
+
+    existing_en_aliases = {
+        a.alias.lower()
+        for a in db.query(ProductAlias.alias).filter(ProductAlias.lang == "en").all()
+    }
+    for alias_text in candidate_aliases:
+        if alias_text not in existing_en_aliases:
+            db.add(ProductAlias(product_id=product.id, alias=alias_text, lang="en"))
+            existing_en_aliases.add(alias_text)
+
+    if req.usable_stock > 0:
+        db.add(
+            StockMovement(
+                product_id=product.id,
+                idempotency_key=str(uuid.uuid4()),
+                received=req.usable_stock,
+                damaged=0,
+                usable_delta=req.usable_stock,
+                raw_transcript=f"Added '{clean_name}' with opening stock",
+                lang="en",
+                source="manual",
+                was_corrected=False,
+            )
+        )
+
+    db.flush()
+    db.refresh(product)
+
+    item = StockItem(
+        product_id=product.id,
+        product_name=product.name,
+        category=product.category,
+        usable_stock=product.usable_stock,
+        damaged_stock=product.damaged_stock,
+        min_threshold=product.min_threshold,
+        is_low=product.usable_stock < product.min_threshold,
+    )
+    return ProductCreateResponse(
+        status="created",
+        message=f"Added '{product.name}' to shop catalogue.",
+        item=item,
+    )
+
+
+# ── DELETE /api/stock/products/{product_id} ──────────────────────────────────
+
+@router.delete("/stock/products/{product_id}", response_model=ProductDeleteResponse)
+def delete_product(product_id: int, db: Session = Depends(get_db)) -> ProductDeleteResponse:
+    """Remove a SKU and its aliases/history from the shop catalogue."""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product ID {product_id} not found.")
+
+    name = product.name
+    db.delete(product)
+    db.flush()
+
+    return ProductDeleteResponse(
+        status="deleted",
+        message=f"Removed '{name}' from shop catalogue.",
+        product_id=product_id,
     )
 
 

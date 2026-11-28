@@ -41,6 +41,8 @@ function KiranaFlowShell() {
     resetToIdle,
     adjustDraftQuantities,
     adjustStockItem,
+    addCatalogProduct,
+    removeCatalogProduct,
   } = useDeliveryFlow();
 
   return (
@@ -119,6 +121,8 @@ function KiranaFlowShell() {
               lowStockCount={lowStockCount}
               lang={lang}
               onAdjustStock={adjustStockItem}
+              onAddProduct={addCatalogProduct}
+              onDeleteProduct={removeCatalogProduct}
             />
           )}
 

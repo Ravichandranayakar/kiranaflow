@@ -27,7 +27,7 @@ _CPU_THREADS = min(4, os.cpu_count() or 2)
 # Bias Whisper decoding toward KiranaFlow's multilingual Indian grocery vocabulary
 # while keeping Romanized transcription compatible with parser.py aliases.
 KIRANA_PROMPT = (
-    "Kirana delivery log: 24 milk packets bandide 2 odada ide, "
+    "Kirana delivery log: 24 milk packets bandide 2 odada ide, 1 kg, 2 kg, 4 kg, 5 kg, "
     "Nandini milk, doodh, haalu, cheeni, sugar, sakre, Aashirvaad atta 1kg 5kg, "
     "Parle-G, Fortune oil, tel, enne, toor dal, daal, Tata salt, namak, uppu, "
     "Colgate, Maggi, basmati rice, chawal, akki, onion, pyaaz, potato, aloo, "
