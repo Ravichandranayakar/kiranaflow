@@ -9,3 +9,4 @@ node_modules/
 dist/
 build/
 pgdata/
+docs/12-demo-script.md
