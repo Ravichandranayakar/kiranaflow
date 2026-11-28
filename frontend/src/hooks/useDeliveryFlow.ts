@@ -359,9 +359,16 @@ export function useDeliveryFlow() {
           entries.length > 0
             ? formatLocalizedReadbackFallback(entries, langRef.current)
             : (res.readback_text ?? undefined);
-        if (spokenReadback || fallbackReadback) {
+        const promptSpeech =
+          res.question_kind === 'noise' && res.question ? res.question : spokenReadback;
+        const promptFallback =
+          res.question_kind === 'noise' && res.question ? res.question : fallbackReadback;
+        if (res.question_kind === 'noise' && res.question) {
+          showToast('warning', res.question);
+        }
+        if (promptSpeech || promptFallback) {
           speakText(
-            spokenReadback || fallbackReadback || '',
+            promptSpeech || promptFallback || '',
             langRef.current,
             isMuted,
             source === 'voice' && autoFollowUpRef.current
@@ -374,7 +381,7 @@ export function useDeliveryFlow() {
                   }
                 }
               : undefined,
-            fallbackReadback,
+            promptFallback,
           );
         }
       } else if (res.status === 'clarify' || res.status === 'unknown') {
@@ -399,7 +406,13 @@ export function useDeliveryFlow() {
       } else if (res.status === 'error') {
         if (res.question_kind === 'noise' && !res.raw_transcript) {
           setMicError(res.question ?? 'Could not hear words clearly — try again or type below.');
-          setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+          setFlowState(
+            draftRef.current.awaiting_confirmation
+              ? 'AWAITING_CONFIRMATION'
+              : draftRef.current.pending_question_kind
+                ? 'NEEDS_CLARIFICATION'
+                : 'IDLE',
+          );
         } else {
           setFlowState('ERROR');
           if (res.question) {
@@ -603,7 +616,9 @@ export function useDeliveryFlow() {
       prev === 'LISTENING'
         ? draftRef.current.awaiting_confirmation
           ? 'AWAITING_CONFIRMATION'
-          : 'IDLE'
+          : draftRef.current.pending_question_kind
+            ? 'NEEDS_CLARIFICATION'
+            : 'IDLE'
         : prev,
     );
   }, []);
@@ -748,7 +763,13 @@ export function useDeliveryFlow() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unable to transcribe audio';
         setMicError(`${msg} — tap mic to retry or type below.`);
-        setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+        setFlowState(
+          draftRef.current.awaiting_confirmation
+            ? 'AWAITING_CONFIRMATION'
+            : draftRef.current.pending_question_kind
+              ? 'NEEDS_CLARIFICATION'
+              : 'IDLE',
+        );
       }
     };
 

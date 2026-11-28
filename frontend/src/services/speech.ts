@@ -188,7 +188,7 @@ export function speakText(
       utterance.onend = () => {
         if (seq !== activeSpeakSeq || activeUtterance !== utterance) return;
         activeUtterance = null;
-        finish(400);
+        finish(500);
       };
 
       utterance.onerror = (event) => {

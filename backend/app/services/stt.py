@@ -28,6 +28,7 @@ _CPU_THREADS = min(4, os.cpu_count() or 2)
 # while keeping Romanized transcription compatible with parser.py aliases.
 KIRANA_PROMPT = (
     "Kirana delivery log: 24 milk packets bandide 2 odada ide, 1 kg, 2 kg, 4 kg, 5 kg, "
+    "2 eggs, 1 egg, 12 eggs, only one, first one, second one, both, ella, eradu, eradu nu, dono, sab, "
     "Nandini milk, doodh, haalu, cheeni, sugar, sakre, Aashirvaad atta 1kg 5kg, "
     "Parle-G, Fortune oil, tel, enne, toor dal, daal, Tata salt, namak, uppu, "
     "Colgate, Maggi, basmati rice, chawal, akki, onion, pyaaz, potato, aloo, "
@@ -96,11 +97,34 @@ def transcribe_audio_bytes(audio_bytes: bytes, suffix: str = ".webm") -> str:
         language="en",
         initial_prompt=KIRANA_PROMPT,
         vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 250},
+        vad_parameters={
+            "threshold": 0.22,
+            "min_speech_duration_ms": 60,
+            "min_silence_duration_ms": 350,
+        },
+        no_speech_threshold=0.75,
         beam_size=1,
         best_of=1,
         condition_on_previous_text=False,
         without_timestamps=True,
     )
     parts = [seg.text.strip() for seg in segments if seg.text and seg.text.strip()]
+
+    # Short 1-2 word replies ("ella", "eradu nu", "2 eggs", "only one") can still be trimmed by VAD;
+    # fall back once without VAD when audible audio energy is clearly present.
+    if not parts and float(np.max(np.abs(audio))) >= 0.008:
+        fallback_segments, _ = model.transcribe(
+            audio,
+            language="en",
+            initial_prompt=KIRANA_PROMPT,
+            vad_filter=False,
+            no_speech_threshold=0.75,
+            log_prob_threshold=-1.2,
+            beam_size=1,
+            best_of=1,
+            condition_on_previous_text=False,
+            without_timestamps=True,
+        )
+        parts = [seg.text.strip() for seg in fallback_segments if seg.text and seg.text.strip()]
+
     return " ".join(parts).strip()

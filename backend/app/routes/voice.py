@@ -13,6 +13,7 @@ POST /api/voice/parse
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -25,6 +26,7 @@ from app.services.catalogue_service import load_catalogue
 from app.services.parser import parse_transcript
 from app.services.stt import transcribe_audio_bytes
 
+logger = logging.getLogger("kiranaflow.voice")
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
 
@@ -104,6 +106,13 @@ async def voice_intake_one_hop(
         draft=draft,
         catalogue=catalogue,
         lang=lang,
+    )
+    logger.info(
+        "Voice intake (%s): transcript=%r status=%s kind=%s",
+        lang,
+        transcript,
+        response.status,
+        response.question_kind,
     )
     if response.raw_transcript is None:
         response.raw_transcript = transcript

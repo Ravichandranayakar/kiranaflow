@@ -616,3 +616,56 @@ class TestMultiItemParsing:
         # Bare "no" alone still cancels explicitly
         cancelled = parse_transcript("no", res.draft, TEST_CATALOGUE, "en")
         assert cancelled.action == "cancel"
+
+    def test_spoken_only_one_ella_eradu_nu_and_switch_sku(self):
+        """'only one', 'ella', 'eradu nu', 'to eggs', and SKU switches resolve instead of looping"""
+        # 1. Ordinal "only one" / "second one" during variant prompt picks candidate cleanly
+        var_prompt = parse_transcript("5 atta", PendingDraft(), TEST_CATALOGUE, "en")
+        assert var_prompt.question_kind == "variant"
+        picked_first = parse_transcript("only one", var_prompt.draft, TEST_CATALOGUE, "en")
+        assert picked_first.status == "complete"
+        assert picked_first.draft.product_name == "Aashirvaad Atta 1kg"
+        assert picked_first.draft.received == 5
+
+        picked_second = parse_transcript("second one", var_prompt.draft, TEST_CATALOGUE, "en")
+        assert picked_second.status == "complete"
+        assert picked_second.draft.product_name == "Aashirvaad Atta 5kg"
+
+        # 2. Kannada/colloquial "ella" and "eradu nu" resolve BOTH candidates cleanly (+ optional qty)
+        for phrase in ("ella", "eradu nu", "yellanu"):
+            both_res = parse_transcript(phrase, var_prompt.draft, TEST_CATALOGUE, "kn")
+            assert both_res.status == "complete"
+            assert both_res.entries is not None and len(both_res.entries) == 2
+
+        both_qty = parse_transcript("ella 8", var_prompt.draft, TEST_CATALOGUE, "kn")
+        assert both_qty.status == "complete"
+        assert both_qty.entries is not None and [e.usable for e in both_qty.entries] == [8, 8]
+
+        # 3. Saying "2 eggs" (or STT homophone "to eggs") updates both SKU & qty cleanly without stale 12
+        unknown_stale = parse_transcript("12 chocolate", PendingDraft(), TEST_CATALOGUE, "en")
+        assert unknown_stale.draft.received == 12
+        switched_eggs = parse_transcript("2 eggs", unknown_stale.draft, TEST_CATALOGUE, "en")
+        assert switched_eggs.status == "complete"
+        assert switched_eggs.draft.product_name == "Eggs (12 pack)"
+        assert switched_eggs.draft.received == 2
+
+        # Homophone "to eggs" while confirming stale 12 updates to 2 dozens
+        stale_twelve = parse_transcript("12 eggs", PendingDraft(), TEST_CATALOGUE, "en")
+        assert stale_twelve.draft.received == 12
+        fix_to_two = parse_transcript("to eggs", stale_twelve.draft, TEST_CATALOGUE, "en")
+        assert fix_to_two.status == "complete"
+        assert fix_to_two.draft.received == 2
+
+        # 4. Narrowing a 2-item batch via "only maggi" or "only one" & keeping confirm on noise
+        batch = parse_transcript("5 onion and 4 maggi", PendingDraft(), TEST_CATALOGUE, "en")
+        narrowed = parse_transcript("only maggi", batch.draft, TEST_CATALOGUE, "en")
+        assert narrowed.status == "complete"
+        assert narrowed.draft.product_name == "Maggi Noodles 70g"
+        assert narrowed.draft.received == 4
+        assert narrowed.draft.queued_entries is None
+
+        noisy = parse_transcript("something unclear", stale_twelve.draft, TEST_CATALOGUE, "en")
+        assert noisy.status == "complete"
+        assert noisy.question_kind == "noise"
+        assert noisy.draft.awaiting_confirmation is True
+        assert noisy.draft.product_id == 9

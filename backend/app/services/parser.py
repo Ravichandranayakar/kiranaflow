@@ -148,7 +148,40 @@ def _has_correction_marker(text_lower: str) -> bool:
     return bool(_CORRECTION_RE.search(text_lower))
 
 
-BOTH_KEYWORDS = {"both", "all", "dono", "sab", "eradu", "ellavu"}
+BOTH_KEYWORDS = {
+    "both", "boath", "all",
+    "dono", "donon", "sab", "sabhi", "saare",
+    "eradu", "eradunu", "erdu", "eredo", "yeradu", "yeradunu",
+    "ella", "ellavu", "ellanu", "yella", "yellavu", "yellanu",
+}
+_BOTH_PHRASE_RE = re.compile(
+    r"\b(?:eradu\s+nu|yeradu\s+nu|ella\s+nu|yella\s+nu|do\s+no|"
+    r"both\s+of\s+them|all\s+of\s+them|add\s+both|save\s+both|take\s+both)\b"
+)
+_DIGIT_TRANSLATION = str.maketrans("०१२३४५६७८९೦೧೨೩೪೫೬೭೮೯", "01234567890123456789")
+_TO_TWO_RE = re.compile(
+    r"\b(?:to|too|tu)(?=\s+(?:"
+    + "|".join(re.escape(k) for k in UNIT_KEYWORDS)
+    + r"|eggs?|egg|milk|maggi|magi|salt|sugar|oil|atta|rice|dal|daal|onion|potato|surf|colgate|parle|anda|motte|doodh|haalu|cheeni|sakre|namak|uppu|chawal|akki|bele|tel|enne)\b)"
+)
+_FIRST_CHOICE_RE = re.compile(
+    r"\b(?:only\s+one|just\s+one|one\s+only|first(?:\s+one)?|only\s+first|1st|"
+    r"pahla|pehla|pehle|modala|modalanedu|ondane)\b"
+)
+_SECOND_CHOICE_RE = re.compile(
+    r"\b(?:only\s+two|just\s+two|second(?:\s+one)?|only\s+second|2nd|last(?:\s+one)?|"
+    r"dusra|doosra|eradanedu)\b"
+)
+
+
+def _normalize_spoken_transcript(text_lower: str) -> str:
+    """Normalize Indic digit glyphs and contextual 'to eggs' -> '2 eggs' STT homophones."""
+    normalized = text_lower.translate(_DIGIT_TRANSLATION)
+    return _TO_TWO_RE.sub("2", normalized)
+
+
+def _wants_both(text_lower: str, words: set) -> bool:
+    return bool(words & BOTH_KEYWORDS) or bool(_BOTH_PHRASE_RE.search(text_lower))
 
 
 def _split_multi_clauses(text_lower: str, catalogue: List[Dict]) -> Optional[List[str]]:
@@ -292,10 +325,9 @@ def parse_transcript(
     the next ParseResponse. Supports both single-item and multi-item utterances.
     """
     text = transcript.strip()
-    text_lower = text.lower()
-
     if not text:
         return _error_response(draft, "No input received. Please speak or type the delivery details.")
+    text_lower = _normalize_spoken_transcript(text.lower())
 
     # ── Step 0: Check for confirm/cancel if awaiting confirmation ─────────
     if draft.awaiting_confirmation:
@@ -308,9 +340,9 @@ def parse_transcript(
     # ── Step 0c: Multi-item delivery sentence detection ───────────────────
     multi_clauses = _split_multi_clauses(text_lower, catalogue)
     if multi_clauses:
-        return _finalize_multi_queue([], multi_clauses, catalogue, lang, transcript)
+        return _finalize_multi_queue([], multi_clauses, catalogue, lang, text)
 
-    return _parse_single_turn(transcript, draft, catalogue, lang)
+    return _parse_single_turn(text_lower, draft, catalogue, lang)
 
 
 def _parse_single_turn(
@@ -453,15 +485,18 @@ def _merge_clarification(
     if kind == "variant":
         words = _tokenize_words(text_lower)
         candidates = draft.candidates or []
-        # User explicitly asked for BOTH / ALL listed candidates (e.g., "both i told", "both")
-        if len(candidates) >= 2 and (words & BOTH_KEYWORDS):
-            qty_suffix = f":{draft.received}" if draft.received is not None else ""
+        candidate_ids = {c.product_id for c in candidates}
+        # User asked for BOTH / ALL listed candidates (e.g., "both i told", "ella", "eradu nu")
+        if len(candidates) >= 2 and _wants_both(text_lower, words):
+            nums = _extract_numbers(text_lower)
+            chosen_qty = nums[-1] if nums else draft.received
+            qty_suffix = f":{chosen_qty}" if chosen_qty is not None else ""
             candidate_clauses = [f"__pid:{cand.product_id}{qty_suffix}" for cand in candidates]
             prior = list(draft.queued_entries or [])
             trailing = list(draft.queued_clauses or [])
             return _finalize_multi_queue(prior, candidate_clauses + trailing, catalogue, lang, text_lower)
 
-        # User picked a single candidate
+        # User picked a single candidate (by name, size, casual brand, or ordinal "only one"/"second")
         picked = _resolve_variant(text_lower, candidates, catalogue)
         if picked:
             new_draft.product_id = picked["id"]
@@ -470,14 +505,24 @@ def _merge_clarification(
             if new_draft.unit is None:
                 new_draft.unit = picked.get("default_unit", "packets")
         else:
-            # Couldn't resolve — ask again
+            # If shopkeeper switched to naming a different SKU ("2 eggs", "maggi"), honour that instead of looping
+            other_matches = _match_product(text_lower, catalogue)
+            if other_matches and not ({m["id"] for m in other_matches} <= candidate_ids):
+                switched_draft = PendingDraft(
+                    queued_entries=draft.queued_entries,
+                    queued_clauses=draft.queued_clauses,
+                )
+                return _parse_single_turn(text_lower, switched_draft, catalogue, lang)
+
+            # Couldn't resolve — acknowledge what was heard and ask again clearly
             new_draft.pending_question_kind = "variant"
+            options_q = _format_variant_question(
+                [{"id": c.product_id, "name": c.product_name} for c in candidates],
+                lang,
+            )
             return ParseResponse(
                 status="clarify",
-                question=_format_variant_question(
-                    [{"id": c.product_id, "name": c.product_name} for c in candidates],
-                    lang,
-                ),
+                question=f"Heard '{text_lower}' — {options_q}",
                 question_kind="variant",
                 candidates=candidates,
                 draft=new_draft,
@@ -514,6 +559,14 @@ def _merge_clarification(
             )
 
     elif kind == "received_qty":
+        other_matches = _match_product(text_lower, catalogue)
+        if other_matches and all(m["id"] != new_draft.product_id for m in other_matches):
+            return _parse_single_turn(
+                text_lower,
+                PendingDraft(queued_entries=draft.queued_entries, queued_clauses=draft.queued_clauses),
+                catalogue,
+                lang,
+            )
         numbers = _extract_numbers(text_lower)
         if numbers:
             qty = numbers[-1]
@@ -540,6 +593,14 @@ def _merge_clarification(
             )
 
     elif kind == "damaged_qty":
+        other_matches = _match_product(text_lower, catalogue)
+        if other_matches and all(m["id"] != new_draft.product_id for m in other_matches):
+            return _parse_single_turn(
+                text_lower,
+                PendingDraft(queued_entries=draft.queued_entries, queued_clauses=draft.queued_clauses),
+                catalogue,
+                lang,
+            )
         numbers = _extract_numbers(text_lower)
         if numbers:
             new_draft.damaged = numbers[-1]
@@ -556,13 +617,19 @@ def _merge_clarification(
             )
 
     elif kind == "unknown_sku":
-        # User restated the product — try matching again
+        # User restated the product (possibly with a new quantity like "2 eggs") — match & update qty cleanly
+        numbers = _extract_numbers(text_lower)
+        if numbers:
+            _, dmg_nums, rec_nums = _partition_damage(text_lower, numbers)
+            if rec_nums:
+                new_draft.received = rec_nums[-1]
+            if dmg_nums:
+                new_draft.damaged = dmg_nums[-1]
         matches = _match_product(text_lower, catalogue)
         if len(matches) == 1:
             new_draft.product_id = matches[0]["id"]
             new_draft.product_name = matches[0]["name"]
-            if new_draft.unit is None:
-                new_draft.unit = matches[0].get("default_unit", "packets")
+            new_draft.unit = matches[0].get("default_unit", new_draft.unit or "packets")
         elif len(matches) > 1:
             new_draft.pending_question_kind = "variant"
             new_draft.candidates = [
@@ -668,7 +735,32 @@ def _handle_confirmation_turn(
             raw_transcript=text_lower,
         )
 
-    # Batch item spoken correction (e.g., "maggi 12" or "onion 3 damaged")
+    # Batch item spoken narrowing ("only maggi", "only first", "only one") or quantity edit ("maggi 12")
+    if draft.queued_entries and len(draft.queued_entries) > 1:
+        narrow_item: Optional[PendingEntry] = None
+        if not has_damage_kw:
+            match_ids = {m["id"] for m in matches}
+            matched_in_batch = [e for e in draft.queued_entries if e.product_id in match_ids]
+            if len(matched_in_batch) == 1 and (words & {"only", "just"} or not numbers):
+                narrow_item = matched_in_batch[0]
+            elif _FIRST_CHOICE_RE.search(text_lower):
+                narrow_item = draft.queued_entries[0]
+            elif _SECOND_CHOICE_RE.search(text_lower):
+                narrow_item = draft.queued_entries[1]
+
+        if narrow_item is not None:
+            single_draft = PendingDraft(
+                product_id=narrow_item.product_id,
+                product_name=narrow_item.product_name,
+                received=narrow_item.received,
+                damaged=narrow_item.damaged,
+                usable=narrow_item.usable,
+                unit=narrow_item.unit,
+                was_corrected=True,
+                idempotency_key=narrow_item.idempotency_key,
+            )
+            return _try_complete(single_draft, text_lower, lang)
+
     if draft.queued_entries and len(draft.queued_entries) > 1 and numbers:
         match_ids = {m["id"] for m in matches}
         updated_batch: List[PendingEntry] = []
@@ -723,6 +815,20 @@ def _handle_confirmation_turn(
                 readback_text=_format_multi_readback(updated_batch, lang),
                 raw_transcript=text_lower,
             )
+
+    # Single-item draft: if user clearly spoke a DIFFERENT SKU (e.g. "2 eggs" while confirming Milk), switch to it cleanly
+    if (
+        not draft.queued_entries
+        and matches
+        and all(m["id"] != draft.product_id for m in matches)
+    ):
+        if len(matches) == 1:
+            switched = _parse_single_turn(text_lower, PendingDraft(), catalogue, lang)
+            switched.draft.was_corrected = True
+            return switched
+        # Multiple variant matches for new product
+        switched_multi = _parse_single_turn(text_lower, PendingDraft(), catalogue, lang)
+        return switched_multi
 
     new_draft = draft.model_copy()
     new_draft.was_corrected = True
@@ -829,13 +935,30 @@ def _handle_confirmation_turn(
             raw_transcript=text_lower,
         )
 
-    # Keep awaiting_confirmation = True so a follow-up "Confirm" / "OK" or quantity still works
+    # Keep Confirm & Save card active so unrecognized speech never hides buttons or drops progress
     new_draft.awaiting_confirmation = True
+    batch = new_draft.queued_entries if new_draft.queued_entries else None
+    primary = PendingEntry(
+        product_id=new_draft.product_id,  # type: ignore
+        product_name=new_draft.product_name,  # type: ignore
+        received=new_draft.received,  # type: ignore
+        damaged=new_draft.damaged or 0,
+        usable=new_draft.usable,  # type: ignore
+        unit=new_draft.unit or "packets",
+        idempotency_key=new_draft.idempotency_key,  # type: ignore
+    )
     return ParseResponse(
-        status="clarify",
-        question="Say the updated quantity (e.g. '3 damaged' or '30 packets'), or say 'Confirm' to save.",
+        status="complete",
+        entry=primary,
+        entries=batch,
+        question=f"Didn't catch '{text_lower}'. Say Confirm to save, or tell me the new number.",
         question_kind="noise",
         draft=new_draft,
+        readback_text=(
+            _format_multi_readback(batch, lang)
+            if batch and len(batch) > 1
+            else _format_readback(new_draft, lang)
+        ),
         raw_transcript=text_lower,
     )
 
@@ -1079,7 +1202,14 @@ def _resolve_variant(
                 if size in candidate.product_name.lower():
                     return _find_item(candidate)
 
-    # 3. Distinguishing word match (words unique to one candidate, not shared across all)
+    # 3. Ordinal / single-choice selection ("only one", "first one", "second one", "modala")
+    if len(candidates) >= 2:
+        if _FIRST_CHOICE_RE.search(text_clean) or text_clean in {"1", "one", "ondu", "ek"}:
+            return _find_item(candidates[0])
+        if _SECOND_CHOICE_RE.search(text_clean) or text_clean in {"2", "two"}:
+            return _find_item(candidates[1])
+
+    # 4. Distinguishing word match or candidate-scoped product matcher
     if candidates:
         word_sets = [set(c.product_name.lower().split()) for c in candidates]
         shared_words = set.intersection(*word_sets) if len(word_sets) > 1 else set()
@@ -1090,6 +1220,11 @@ def _resolve_variant(
             ]
             if any(w in text_clean for w in unique_words):
                 return _find_item(candidate)
+
+        cand_items = [item for item in catalogue if item["id"] in {c.product_id for c in candidates}]
+        sub_matches = _match_product(text_clean, cand_items)
+        if len(sub_matches) == 1:
+            return sub_matches[0]
 
     return None
 
