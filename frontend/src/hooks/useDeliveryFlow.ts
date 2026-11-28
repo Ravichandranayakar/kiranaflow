@@ -373,7 +373,7 @@ export function useDeliveryFlow() {
         }
         finalizeListening(latestSpokenRef.current);
       }
-    }, 400);
+    }, 250);
   }, [finalizeListening]);
 
   const toggleListening = useCallback(() => {
@@ -413,7 +413,7 @@ export function useDeliveryFlow() {
       setFlowState('LISTENING');
       setInterimTranscript('');
 
-      // Never hang in LISTENING if the browser mic hears nothing for 6s
+      // No audio heard within 4 s of mic open → show helpful error rather than hanging
       if (noSpeechTimeoutRef.current !== null) {
         window.clearTimeout(noSpeechTimeoutRef.current);
       }
@@ -422,8 +422,11 @@ export function useDeliveryFlow() {
           setMicError('No audio heard — check your microphone in Chrome or type below.');
           stopListening();
         }
-      }, 6000);
+      }, 4000);
     };
+
+    // Track last seen transcript to detect genuinely new speech vs Chrome re-firing stale interim
+    let lastSeenCombined = '';
 
     recognition.onresult = (event) => {
       if (noSpeechTimeoutRef.current !== null) {
@@ -441,7 +444,8 @@ export function useDeliveryFlow() {
           interim += text;
         }
       }
-      const combined = `${finalChunk} ${interim}`.trim();
+      const combined = `${finalChunk}${interim}`.trim();
+
       if (finalChunk.trim()) {
         finalSpoken = finalChunk.trim();
         latestSpokenRef.current = combined || finalSpoken;
@@ -451,11 +455,15 @@ export function useDeliveryFlow() {
       }
       setInterimTranscript(combined);
 
-      // Auto-stop and submit 1.5s after the shopkeeper stops speaking (no second tap needed)
-      if (combined) {
+      // Only restart silence timer when Chrome delivers genuinely NEW transcript content.
+      // Chrome fires onresult repeatedly with identical stale interim text — ignoring those
+      // prevents the silence timer from resetting indefinitely and the mic from hanging.
+      if (combined && combined !== lastSeenCombined) {
+        lastSeenCombined = combined;
         if (silenceTimeoutRef.current !== null) {
           window.clearTimeout(silenceTimeoutRef.current);
         }
+        // 1.5 s of silence after the last NEW syllable → auto-stop & submit
         silenceTimeoutRef.current = window.setTimeout(() => {
           if (recognitionRef.current === recognition) {
             stopListening();
