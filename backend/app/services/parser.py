@@ -99,7 +99,9 @@ CONFIRM_KEYWORDS = {
     "yep", "yup", "haan", "ha", "houdu", "haudu", "sari", "seri",
     "ok", "okay", "done", "save", "theek", "thik",
 }
-CANCEL_KEYWORDS = {"cancel", "cancelled", "no", "nahi", "beda", "bedi", "skip", "discard", "chhodo"}
+HARD_CANCEL_KEYWORDS = {"cancel", "cancelled", "skip", "discard", "chhodo"}
+SOFT_CANCEL_KEYWORDS = {"no", "nahi", "beda", "bedi"}
+CANCEL_KEYWORDS = HARD_CANCEL_KEYWORDS | SOFT_CANCEL_KEYWORDS
 
 # ── Unit Keywords ────────────────────────────────────────────────────────────
 
@@ -602,6 +604,19 @@ def _tokenize_words(text: str) -> set:
     return set(_PUNCT_RE.sub(" ", normalized).split())
 
 
+def _pick_received_number(text_lower: str, received_numbers: List[int]) -> int:
+    """Pick the intended received count, avoiding explicit 'not <num>' rejections when another exists."""
+    if len(received_numbers) >= 2:
+        non_negated = [
+            n
+            for n in received_numbers
+            if not re.search(rf"\bnot\s+{n}\b", text_lower)
+        ]
+        if non_negated:
+            return non_negated[-1]
+    return received_numbers[-1]
+
+
 def _handle_confirmation_turn(
     text_lower: str,
     draft: PendingDraft,
@@ -610,9 +625,15 @@ def _handle_confirmation_turn(
 ) -> ParseResponse:
     """Handle spoken input while awaiting confirmation."""
     words = _tokenize_words(text_lower)
+    numbers = _extract_numbers(text_lower)
+    has_damage_kw, damage_numbers, received_numbers = _partition_damage(text_lower, numbers)
+    matches = _match_product(text_lower, catalogue)
+    has_soft_cancel = bool(words & SOFT_CANCEL_KEYWORDS)
 
-    # Check for cancel
-    if words & CANCEL_KEYWORDS:
+    # Hard cancel keywords always abort; soft negatives ("no"/"nahi"/"beda") only cancel when bare
+    if (words & HARD_CANCEL_KEYWORDS) or (
+        has_soft_cancel and not numbers and not has_damage_kw and not matches
+    ):
         new_draft = PendingDraft()  # reset
         return ParseResponse(
             status="complete",
@@ -621,8 +642,8 @@ def _handle_confirmation_turn(
             raw_transcript=text_lower,
         )
 
-    # Check for confirm
-    if words & CONFIRM_KEYWORDS:
+    # Confirm only when there are no conflicting corrections or soft negatives
+    if (words & CONFIRM_KEYWORDS) and not numbers and not has_damage_kw and not has_soft_cancel:
         batch = draft.queued_entries if draft.queued_entries else None
         primary = PendingEntry(
             product_id=draft.product_id,  # type: ignore
@@ -647,19 +668,18 @@ def _handle_confirmation_turn(
             raw_transcript=text_lower,
         )
 
-    # Neither confirm nor cancel — treat as a correction
-    numbers = _extract_numbers(text_lower)
-    has_damage_kw, damage_numbers, received_numbers = _partition_damage(text_lower, numbers)
-
     # Batch item spoken correction (e.g., "maggi 12" or "onion 3 damaged")
     if draft.queued_entries and len(draft.queued_entries) > 1 and numbers:
-        matches = _match_product(text_lower, catalogue)
         match_ids = {m["id"] for m in matches}
         updated_batch: List[PendingEntry] = []
         changed_batch = False
         for item in draft.queued_entries:
             if item.product_id in match_ids:
-                new_rec = received_numbers[-1] if received_numbers else item.received
+                new_rec = (
+                    _pick_received_number(text_lower, received_numbers)
+                    if received_numbers
+                    else item.received
+                )
                 new_dmg = damage_numbers[-1] if (has_damage_kw and damage_numbers) else item.damaged
                 if has_damage_kw and not damage_numbers and numbers:
                     new_dmg = numbers[-1]
@@ -707,9 +727,26 @@ def _handle_confirmation_turn(
     new_draft = draft.model_copy()
     new_draft.was_corrected = True
 
+    if has_damage_kw and not numbers:
+        if words & (SOFT_CANCEL_KEYWORDS | {"none", "zero", "illa"}):
+            new_draft.awaiting_confirmation = False
+            new_draft.damaged = 0
+            if new_draft.received is not None:
+                new_draft.usable = new_draft.received
+            return _try_complete(new_draft, text_lower, lang)
+        new_draft.awaiting_confirmation = False
+        new_draft.pending_question_kind = "damaged_qty"
+        return ParseResponse(
+            status="clarify",
+            question=_format_damaged_qty_question(new_draft.product_name or "the item", lang),
+            question_kind="damaged_qty",
+            draft=new_draft,
+            raw_transcript=text_lower,
+        )
+
     if has_damage_kw and damage_numbers and received_numbers:
         new_draft.awaiting_confirmation = False
-        new_draft.received = received_numbers[-1]
+        new_draft.received = _pick_received_number(text_lower, received_numbers)
         new_draft.damaged = damage_numbers[-1]
         new_draft.usable = new_draft.received - new_draft.damaged
         if new_draft.received in TEEN_TENS_PAIRS:
@@ -731,8 +768,30 @@ def _handle_confirmation_turn(
             new_draft.usable = new_draft.received - new_draft.damaged
         return _try_complete(new_draft, text_lower, lang)
     elif numbers:
+        picked = _pick_received_number(text_lower, received_numbers or numbers)
+        # If user said "no 24" / "not 24" rejecting the current qty without stating the new one, ask
+        if (
+            len(numbers) == 1
+            and picked == draft.received
+            and re.search(rf"\b(?:no|not|nahi|illa|alla)\s+{picked}\b", text_lower)
+        ):
+            new_draft.awaiting_confirmation = False
+            new_draft.received = None
+            new_draft.usable = None
+            new_draft.pending_question_kind = "received_qty"
+            return ParseResponse(
+                status="clarify",
+                question=_format_received_qty_question(
+                    new_draft.product_name or "the item",
+                    new_draft.unit or "packets",
+                    lang,
+                ),
+                question_kind="received_qty",
+                draft=new_draft,
+                raw_transcript=text_lower,
+            )
         new_draft.awaiting_confirmation = False
-        new_draft.received = numbers[-1]
+        new_draft.received = picked
         if new_draft.damaged is not None:
             new_draft.usable = new_draft.received - new_draft.damaged
         if new_draft.received in TEEN_TENS_PAIRS:
@@ -747,6 +806,28 @@ def _handle_confirmation_turn(
                 raw_transcript=text_lower,
             )
         return _try_complete(new_draft, text_lower, lang)
+    elif matches and not draft.queued_entries:
+        if len(matches) == 1:
+            new_draft.awaiting_confirmation = False
+            new_draft.product_id = matches[0]["id"]
+            new_draft.product_name = matches[0]["name"]
+            new_draft.unit = matches[0].get("default_unit", new_draft.unit or "packets")
+            return _try_complete(new_draft, text_lower, lang)
+        new_draft.awaiting_confirmation = False
+        new_draft.product_id = None
+        new_draft.product_name = None
+        new_draft.pending_question_kind = "variant"
+        new_draft.candidates = [
+            Candidate(product_id=m["id"], product_name=m["name"]) for m in matches
+        ]
+        return ParseResponse(
+            status="clarify",
+            question=_format_variant_question(matches, lang),
+            question_kind="variant",
+            candidates=new_draft.candidates,
+            draft=new_draft,
+            raw_transcript=text_lower,
+        )
 
     # Keep awaiting_confirmation = True so a follow-up "Confirm" / "OK" or quantity still works
     new_draft.awaiting_confirmation = True

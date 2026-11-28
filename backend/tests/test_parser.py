@@ -577,3 +577,42 @@ class TestMultiItemParsing:
         gold = parse_transcript("1 kg of gold", PendingDraft(), TEST_CATALOGUE, "en")
         assert gold.status == "unknown"
         assert gold.question_kind == "unknown_sku"
+
+    def test_negated_qty_correction_does_not_cancel(self):
+        """'no 24 its 35' during confirmation edits received to 35 instead of cancelling"""
+        res = parse_transcript("24 maggi", PendingDraft(), TEST_CATALOGUE, "en")
+        assert res.draft.awaiting_confirmation is True
+
+        # Reported bug: "no 24 its 35" must update qty to 35 and stay in confirmation
+        edited = parse_transcript("no 24 its 35", res.draft, TEST_CATALOGUE, "en")
+        assert edited.action != "cancel"
+        assert edited.status == "complete"
+        assert edited.draft.awaiting_confirmation is True
+        assert edited.draft.received == 35
+        assert edited.draft.usable == 35
+        assert edited.draft.was_corrected is True
+
+        # Reversed wording ("35 not 24"), damage correction ("no 2 damaged"), and zero-damage ("no damaged")
+        reversed_edit = parse_transcript("35 not 24", res.draft, TEST_CATALOGUE, "en")
+        assert reversed_edit.action != "cancel"
+        assert reversed_edit.draft.received == 35
+
+        dmg_edit = parse_transcript("no 2 damaged", edited.draft, TEST_CATALOGUE, "en")
+        assert dmg_edit.action != "cancel"
+        assert dmg_edit.draft.damaged == 2
+        assert dmg_edit.draft.usable == 33
+
+        zero_dmg = parse_transcript("no damaged", dmg_edit.draft, TEST_CATALOGUE, "en")
+        assert zero_dmg.action != "cancel"
+        assert zero_dmg.draft.damaged == 0
+        assert zero_dmg.draft.usable == 35
+
+        # Saying "no 24" without giving the replacement prompts for received qty cleanly (no cancel)
+        ask_qty = parse_transcript("no 24", res.draft, TEST_CATALOGUE, "en")
+        assert ask_qty.action != "cancel"
+        assert ask_qty.status == "clarify"
+        assert ask_qty.question_kind == "received_qty"
+
+        # Bare "no" alone still cancels explicitly
+        cancelled = parse_transcript("no", res.draft, TEST_CATALOGUE, "en")
+        assert cancelled.action == "cancel"
