@@ -18,14 +18,14 @@ import {
   fetchMovements,
   fetchStock,
   parseVoice,
+  transcribeVoice,
 } from '../services/api';
 import {
-  createSpeechRecognition,
   isSpeechRecognitionSupported,
+  pickRecordingFormat,
   playTone,
   speakText,
   stopSpeaking,
-  type SpeechRecognitionLike,
 } from '../services/speech';
 import {
   EMPTY_DRAFT,
@@ -74,12 +74,7 @@ export function useDeliveryFlow() {
   const [lastCommitted, setLastCommitted] = useState<CommittedReceipt | null>(null);
   const isConfirmingRef = useRef<boolean>(false);
 
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const stopTimeoutRef = useRef<number | null>(null);
-  const silenceTimeoutRef = useRef<number | null>(null);
-  const noSpeechTimeoutRef = useRef<number | null>(null);
-  const manualStopHandlerRef = useRef<(() => void) | null>(null);
-  const latestSpokenRef = useRef<string>('');
+  const recorderSessionRef = useRef<{ stop: (discard?: boolean) => void } | null>(null);
   const isStartingMicRef = useRef<boolean>(false);
   const draftRef = useRef<PendingDraft>(EMPTY_DRAFT);
   draftRef.current = draft;
@@ -359,268 +354,250 @@ export function useDeliveryFlow() {
     });
   }, []);
 
-  const clearMicTimers = useCallback(() => {
-    if (stopTimeoutRef.current !== null) {
-      window.clearTimeout(stopTimeoutRef.current);
-      stopTimeoutRef.current = null;
-    }
-    if (silenceTimeoutRef.current !== null) {
-      window.clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-    if (noSpeechTimeoutRef.current !== null) {
-      window.clearTimeout(noSpeechTimeoutRef.current);
-      noSpeechTimeoutRef.current = null;
-    }
+  useEffect(() => {
+    return () => {
+      recorderSessionRef.current?.stop(true);
+      recorderSessionRef.current = null;
+    };
   }, []);
 
-  const finalizeListening = useCallback(
-    (recognition: SpeechRecognitionLike | null, spokenText: string) => {
-      if (recognition && recognitionRef.current !== recognition) return;
-      clearMicTimers();
-      recognitionRef.current = null;
-      manualStopHandlerRef.current = null;
-      isStartingMicRef.current = false;
-      setInterimTranscript('');
+  const restoreNonListeningState = useCallback(() => {
+    setInterimTranscript('');
+    setFlowState((prev) =>
+      prev === 'LISTENING'
+        ? draftRef.current.awaiting_confirmation
+          ? 'AWAITING_CONFIRMATION'
+          : 'IDLE'
+        : prev,
+    );
+  }, []);
 
-      const cleaned = spokenText.trim();
-      if (cleaned) {
-        void submitTranscript(cleaned, 'voice');
-      } else {
-        setFlowState((prev) =>
-          prev === 'LISTENING'
-            ? draftRef.current.awaiting_confirmation
-              ? 'AWAITING_CONFIRMATION'
-              : 'IDLE'
-            : prev,
-        );
-      }
-    },
-    [clearMicTimers, submitTranscript],
-  );
-
-  const stopListening = useCallback(() => {
-    if (silenceTimeoutRef.current !== null) {
-      window.clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-    if (noSpeechTimeoutRef.current !== null) {
-      window.clearTimeout(noSpeechTimeoutRef.current);
-      noSpeechTimeoutRef.current = null;
-    }
-    const recognition = recognitionRef.current;
-    if (!recognition) {
-      isStartingMicRef.current = false;
-      setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+  const toggleListening = useCallback(async () => {
+    // Second tap while active stops recording cleanly and kicks off transcription
+    if (flowState === 'LISTENING' || recorderSessionRef.current) {
+      recorderSessionRef.current?.stop(false);
       return;
-    }
-
-    manualStopHandlerRef.current?.();
-    try {
-      recognition.stop();
-    } catch {
-      // ignore if already stopped
-    }
-
-    // Safety fallback: Chrome Web Speech API sometimes delays or drops onend on stop()
-    if (stopTimeoutRef.current !== null) {
-      window.clearTimeout(stopTimeoutRef.current);
-    }
-    stopTimeoutRef.current = window.setTimeout(() => {
-      if (recognitionRef.current === recognition) {
-        try {
-          recognition.abort();
-        } catch {
-          // ignore
-        }
-        finalizeListening(recognition, latestSpokenRef.current);
-      }
-    }, 300);
-  }, [finalizeListening]);
-
-  const toggleListening = useCallback(() => {
-    if (flowState === 'LISTENING') {
-      stopListening();
-      return;
-    }
-
-    // Clean up any lingering previous recognition instance so a rapid re-tap never collides
-    if (recognitionRef.current) {
-      const stale = recognitionRef.current;
-      recognitionRef.current = null;
-      manualStopHandlerRef.current = null;
-      clearMicTimers();
-      try {
-        stale.abort();
-      } catch {
-        // ignore
-      }
     }
 
     if (isStartingMicRef.current) {
-      isStartingMicRef.current = false;
+      return;
     }
 
     if (!micSupported) {
-      setMicError('Voice recognition requires Google Chrome — use the text box below.');
+      setMicError('Microphone recording is unavailable in this browser — use text input below.');
       return;
     }
 
     isStartingMicRef.current = true;
     stopSpeaking();
     setMicError(null);
-    latestSpokenRef.current = '';
+    setInterimTranscript('');
 
-    const recognition = createSpeechRecognition(langRef.current);
-    if (!recognition) {
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          noiseSuppression: true,
+          echoCancellation: true,
+          autoGainControl: true,
+        },
+      });
+    } catch (err) {
       isStartingMicRef.current = false;
-      setMicError('Speech recognition unavailable — use the text input below.');
+      const msg = err instanceof Error ? err.message : 'Microphone permission denied';
+      setMicError(`Could not access microphone (${msg}) — use text input below.`);
       return;
     }
 
-    recognitionRef.current = recognition;
-    let finalSpoken = '';
-    let wasManualStop = false;
-    let audioStarted = false;
-    let soundDetected = false;
-    let lastSeenCombined = '';
+    const { mimeType, filename } = pickRecordingFormat();
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((tr) => tr.stop());
+      isStartingMicRef.current = false;
+      setMicError('Audio recording format unsupported — use text input below.');
+      return;
+    }
 
-    manualStopHandlerRef.current = () => {
-      wasManualStop = true;
+    const chunks: BlobPart[] = [];
+    let discardOutput = false;
+    let stopped = false;
+    let silenceTimer: number | null = null;
+    let noVoiceTimer: number | null = null;
+    let rafId = 0;
+    let audioCtx: AudioContext | null = null;
+
+    const releaseHardware = () => {
+      if (silenceTimer !== null) {
+        window.clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
+      if (noVoiceTimer !== null) {
+        window.clearTimeout(noVoiceTimer);
+        noVoiceTimer = null;
+      }
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      stream.getTracks().forEach((track) => track.stop());
+      if (audioCtx && audioCtx.state !== 'closed') {
+        void audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
     };
 
-    recognition.onstart = () => {
-      if (recognitionRef.current !== recognition) return;
+    const stopSession = (discard = false) => {
+      if (stopped) return;
+      stopped = true;
+      discardOutput = discard;
+      releaseHardware();
+      if (recorder.state !== 'inactive') {
+        try {
+          recorder.stop();
+        } catch {
+          recorderSessionRef.current = null;
+          restoreNonListeningState();
+        }
+      } else {
+        recorderSessionRef.current = null;
+        restoreNonListeningState();
+      }
+    };
+
+    recorderSessionRef.current = { stop: stopSession };
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onerror = () => {
+      recorderSessionRef.current = null;
+      releaseHardware();
+      setMicError('Microphone recording interrupted — tap mic again or type below.');
+      restoreNonListeningState();
+    };
+
+    recorder.onstop = async () => {
+      recorderSessionRef.current = null;
+      releaseHardware();
+      isStartingMicRef.current = false;
+      setInterimTranscript('');
+
+      if (discardOutput) {
+        restoreNonListeningState();
+        return;
+      }
+
+      const blob = new Blob(chunks, { type: mimeType || recorder.mimeType || 'audio/webm' });
+      if (blob.size < 400) {
+        restoreNonListeningState();
+        return;
+      }
+
+      setFlowState('PROCESSING');
+      setTranscript('Transcribing your voice…');
+      try {
+        const { transcript: recognized } = await transcribeVoice(blob, filename);
+        const cleaned = recognized.trim();
+        if (cleaned) {
+          await submitTranscript(cleaned, 'voice');
+        } else {
+          setMicError('Could not catch words clearly — tap mic and speak clearly, or type below.');
+          setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to transcribe audio';
+        setMicError(`${msg} — tap mic to retry or type below.`);
+        setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
+      }
+    };
+
+    // Set up Web Audio VAD for automatic 1.5s post-speech silence stop across all browsers
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx) {
+      try {
+        audioCtx = new AudioCtx();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const startMs = Date.now();
+        let baselineSum = 0;
+        let baselineCount = 0;
+        let speechHeard = false;
+
+        const monitorLevel = () => {
+          if (stopped) return;
+          analyser.getByteTimeDomainData(data);
+          let maxDev = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const dev = Math.abs(data[i] - 128);
+            if (dev > maxDev) maxDev = dev;
+          }
+
+          const elapsed = Date.now() - startMs;
+          if (elapsed < 300) {
+            baselineSum += maxDev;
+            baselineCount += 1;
+          } else {
+            const noiseFloor = baselineCount > 0 ? baselineSum / baselineCount : 4;
+            const threshold = Math.max(8, Math.min(28, noiseFloor * 2.1));
+            if (maxDev > threshold) {
+              speechHeard = true;
+              setInterimTranscript('Hearing voice — pause 1.5s or tap stop when done');
+              if (noVoiceTimer !== null) {
+                window.clearTimeout(noVoiceTimer);
+                noVoiceTimer = null;
+              }
+              if (silenceTimer !== null) {
+                window.clearTimeout(silenceTimer);
+              }
+              silenceTimer = window.setTimeout(() => {
+                if (!stopped && speechHeard) {
+                  stopSession(false);
+                }
+              }, 1500);
+            }
+          }
+          rafId = window.requestAnimationFrame(monitorLevel);
+        };
+
+        rafId = window.requestAnimationFrame(monitorLevel);
+
+        noVoiceTimer = window.setTimeout(() => {
+          if (!stopped && !speechHeard) {
+            setMicError('No voice detected — tap mic and speak, or type below.');
+            stopSession(true);
+          }
+        }, 8000);
+      } catch {
+        // If AudioContext fails, user can still stop manually with one tap
+      }
+    }
+
+    try {
+      recorder.start(250);
       isStartingMicRef.current = false;
       playTone('start');
       setFlowState('LISTENING');
-      setInterimTranscript('');
-
-      // Only trigger no-audio timeout if zero sound/speech arrives within 6.5s
-      if (noSpeechTimeoutRef.current !== null) {
-        window.clearTimeout(noSpeechTimeoutRef.current);
-      }
-      noSpeechTimeoutRef.current = window.setTimeout(() => {
-        if (recognitionRef.current !== recognition) return;
-        if (!soundDetected && !latestSpokenRef.current) {
-          setMicError(
-            audioStarted
-              ? 'Mic is open, but no voice reached Chrome — check Windows default mic / mute switch or type below.'
-              : 'Chrome could not read audio from your mic — check mic permission or type below.',
-          );
-          stopListening();
-        }
-      }, 6500);
-    };
-
-    recognition.onaudiostart = () => {
-      if (recognitionRef.current !== recognition) return;
-      audioStarted = true;
-    };
-
-    recognition.onsoundstart = () => {
-      if (recognitionRef.current !== recognition) return;
-      soundDetected = true;
-      if (noSpeechTimeoutRef.current !== null) {
-        window.clearTimeout(noSpeechTimeoutRef.current);
-        noSpeechTimeoutRef.current = null;
-      }
-    };
-
-    recognition.onspeechstart = () => {
-      if (recognitionRef.current !== recognition) return;
-      soundDetected = true;
-      if (noSpeechTimeoutRef.current !== null) {
-        window.clearTimeout(noSpeechTimeoutRef.current);
-        noSpeechTimeoutRef.current = null;
-      }
-    };
-
-    recognition.onresult = (event) => {
-      if (recognitionRef.current !== recognition) return;
-      soundDetected = true;
-      if (noSpeechTimeoutRef.current !== null) {
-        window.clearTimeout(noSpeechTimeoutRef.current);
-        noSpeechTimeoutRef.current = null;
-      }
-      let interim = '';
-      let finalChunk = '';
-      for (let i = 0; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        const text = result[0]?.transcript ?? '';
-        if (result.isFinal) {
-          finalChunk += `${text} `;
-        } else {
-          interim += text;
-        }
-      }
-      const combined = `${finalChunk}${interim}`.trim();
-
-      if (finalChunk.trim()) {
-        finalSpoken = finalChunk.trim();
-        latestSpokenRef.current = combined || finalSpoken;
-        setTranscript(finalSpoken);
-      } else if (interim.trim()) {
-        latestSpokenRef.current = interim.trim();
-      }
-      setInterimTranscript(combined);
-
-      // Restart 1.5s silence auto-stop only when Chrome delivers genuinely new transcript words
-      if (combined && combined !== lastSeenCombined) {
-        lastSeenCombined = combined;
-        if (silenceTimeoutRef.current !== null) {
-          window.clearTimeout(silenceTimeoutRef.current);
-        }
-        silenceTimeoutRef.current = window.setTimeout(() => {
-          if (recognitionRef.current === recognition) {
-            stopListening();
-          }
-        }, 1500);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      if (recognitionRef.current !== recognition) return;
-      isStartingMicRef.current = false;
-      if (event.error === 'aborted' && wasManualStop) {
-        finalizeListening(recognition, finalSpoken || latestSpokenRef.current);
-        return;
-      }
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        setMicError('Microphone permission blocked in Chrome — allow mic in address bar or type below.');
-      } else if (event.error === 'audio-capture') {
-        setMicError('No working microphone found by Chrome — check Windows Sound input or type below.');
-      } else if (event.error === 'no-speech') {
-        setMicError(
-          audioStarted && !soundDetected
-            ? 'Mic heard zero sound — check your Windows mic mute/input device or type below.'
-            : 'No speech recognized — speak closer to mic or type below.',
-        );
-      } else if (event.error === 'network') {
-        setMicError('Chrome speech-to-text service unreachable (use Google Chrome online or type below).');
-      } else if (event.error !== 'aborted') {
-        setMicError(`Mic error (${event.error}) — you can type below.`);
-      }
-      finalizeListening(recognition, '');
-    };
-
-    recognition.onend = () => {
-      if (recognitionRef.current !== recognition) return;
-      finalizeListening(recognition, finalSpoken || latestSpokenRef.current);
-    };
-
-    try {
-      recognition.start();
     } catch {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
-      }
-      manualStopHandlerRef.current = null;
+      recorderSessionRef.current = null;
+      releaseHardware();
       isStartingMicRef.current = false;
-      setMicError('Could not start microphone — use text input below.');
+      setMicError('Could not start audio recorder — use text input below.');
       setFlowState('IDLE');
     }
-  }, [clearMicTimers, finalizeListening, flowState, micSupported, stopListening]);
+  }, [flowState, micSupported, restoreNonListeningState, submitTranscript]);
 
   return {
     lang,

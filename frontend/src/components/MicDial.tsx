@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Check, Keyboard, Loader2, Mic, Send, Volume2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Check, Keyboard, Loader2, Mic, Send } from 'lucide-react';
 import { TRANSLATIONS } from '../i18n/translations';
-import { detectSpeechEnvironment } from '../services/speech';
 import type { FlowState, LangCode } from '../types/api';
 
 interface MicDialProps {
@@ -28,82 +27,8 @@ export function MicDial({
   const isProcessing = flowState === 'PROCESSING';
   const [showTextBox, setShowTextBox] = useState<boolean>(!micSupported);
   const [textValue, setTextValue] = useState<string>('');
-  const [testingMic, setTestingMic] = useState<boolean>(false);
-  const [micLevel, setMicLevel] = useState<number>(0);
-  const [micDeviceLabel, setMicDeviceLabel] = useState<string>('');
-  const [micProbeError, setMicProbeError] = useState<string | null>(null);
-  const testCleanupRef = useRef<(() => void) | null>(null);
-  const speechEnv = detectSpeechEnvironment();
 
-  useEffect(() => {
-    return () => {
-      testCleanupRef.current?.();
-      testCleanupRef.current = null;
-    };
-  }, []);
-
-  const stopMicTest = () => {
-    testCleanupRef.current?.();
-    testCleanupRef.current = null;
-    setTestingMic(false);
-    setMicLevel(0);
-  };
-
-  const toggleMicTest = async () => {
-    if (testingMic) {
-      stopMicTest();
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setMicProbeError('Browser blocked mediaDevices API (open http://localhost:8085 in Chrome).');
-      return;
-    }
-    setMicProbeError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const trackLabel = stream.getAudioTracks()[0]?.label || 'Default Microphone';
-      setMicDeviceLabel(trackLabel);
-
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) {
-        stream.getTracks().forEach((tr) => tr.stop());
-        return;
-      }
-      const ctx = new AudioCtx();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      let rafId = 0;
-      const tick = () => {
-        analyser.getByteTimeDomainData(data);
-        let maxDev = 0;
-        for (let i = 0; i < data.length; i += 1) {
-          const dev = Math.abs(data[i] - 128);
-          if (dev > maxDev) maxDev = dev;
-        }
-        setMicLevel(Math.min(100, Math.round((maxDev / 64) * 100)));
-        rafId = window.requestAnimationFrame(tick);
-      };
-
-      testCleanupRef.current = () => {
-        window.cancelAnimationFrame(rafId);
-        stream.getTracks().forEach((tr) => tr.stop());
-        void ctx.close().catch(() => {});
-      };
-      setTestingMic(true);
-      tick();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Microphone permission denied';
-      setMicProbeError(`Mic hardware check failed: ${msg}`);
-    }
-  };
-
-  // Auto-open text fallback if mic error occurs or speech recognition unsupported
+  // Auto-open text fallback if mic error occurs or recording unsupported
   useEffect(() => {
     if (!micSupported || micError) {
       setShowTextBox(true);
@@ -237,42 +162,12 @@ export function MicDial({
 
   return (
     <section className="px-5 py-5 flex flex-col items-center justify-center gap-3 bg-[#eae8e2] mt-4 mx-5 rounded-xl shadow-sm">
-      {/* Unsupported Browser / Mic Notice + Hardware Mic Diagnostic */}
-      {(!micSupported || micError || speechEnv.warning) && (
-        <div className="w-full rounded-lg bg-[#a56a2a]/12 border border-[#a56a2a]/35 px-3 py-2.5 text-center space-y-2">
+      {/* Mic Permission / Fallback Notice */}
+      {(!micSupported || micError) && (
+        <div className="w-full rounded-lg bg-[#a56a2a]/12 border border-[#a56a2a]/35 px-3 py-2 text-center">
           <p className="text-[11px] font-medium text-[#7c4d19]">
-            {micError ??
-              speechEnv.warning ??
-              'Voice not supported in this browser — use text input below.'}
+            {micError ?? 'Microphone recording is unavailable in this browser — use text input below.'}
           </p>
-          <div className="flex flex-col items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => void toggleMicTest()}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-[#dedad1] text-[11px] font-semibold text-[#1b1c18] hover:border-[#1c1b1b]"
-            >
-              <Volume2 className="w-3 h-3 text-[#4b6700]" />
-              <span>{testingMic ? 'Stop Mic Check' : `Check Mic Input (${speechEnv.browser})`}</span>
-            </button>
-
-            {testingMic && (
-              <div className="w-full max-w-[260px] space-y-1">
-                <div className="w-full h-2 rounded-full bg-white border border-[#dedad1] overflow-hidden">
-                  <div
-                    className="h-full bg-[#39734c] transition-all duration-75"
-                    style={{ width: `${micLevel}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-[#444748] truncate">
-                  {micDeviceLabel} — Level: {micLevel}%
-                </p>
-              </div>
-            )}
-
-            {micProbeError && (
-              <p className="text-[10px] font-medium text-[#b54a42]">{micProbeError}</p>
-            )}
-          </div>
         </div>
       )}
 
@@ -297,10 +192,7 @@ export function MicDial({
 
         <button
           type="button"
-          onClick={() => {
-            stopMicTest();
-            onToggleMic();
-          }}
+          onClick={onToggleMic}
           disabled={isProcessing}
           aria-pressed={isListening}
           aria-label={isListening ? 'Stop recording' : 'Tap to speak'}

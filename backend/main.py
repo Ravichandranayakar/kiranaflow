@@ -23,6 +23,7 @@ from app.db import SessionLocal, check_db, init_db
 from app.routes.delivery import router as delivery_router
 from app.routes.voice import router as voice_router
 from app.services.seed import seed_catalogue
+from app.services.stt import get_whisper_model
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger("kiranaflow")
@@ -31,7 +32,7 @@ logger = logging.getLogger("kiranaflow")
 # ── Lifespan (startup / shutdown) ────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize DB and seed catalogue on startup."""
+    """Initialize DB, seed catalogue, and warm up offline STT model on startup."""
     logger.info("Initializing database tables...")
     init_db()
 
@@ -41,6 +42,11 @@ async def lifespan(app: FastAPI):
         seed_catalogue(db)
     finally:
         db.close()
+
+    try:
+        get_whisper_model()
+    except Exception as exc:
+        logger.warning("Whisper STT warmup skipped: %s", exc)
 
     logger.info("KiranaFlow backend ready.")
     logger.info("LLM smart parser: %s", "ENABLED" if settings.llm_enabled else "DISABLED (using deterministic parser)")

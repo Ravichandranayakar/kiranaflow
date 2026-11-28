@@ -522,6 +522,11 @@ def _merge_clarification(
 # CONFIRMATION HANDLING
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _tokenize_words(text: str) -> set:
+    """Split text into lowercase words while ignoring trailing punctuation such as '.' or ','."""
+    return set(re.sub(r"[^\w\s-]", " ", text.lower()).split())
+
+
 def _handle_confirmation_turn(
     text_lower: str,
     draft: PendingDraft,
@@ -529,7 +534,7 @@ def _handle_confirmation_turn(
     lang: str,
 ) -> ParseResponse:
     """Handle spoken input while awaiting confirmation."""
-    words = set(text_lower.split())
+    words = _tokenize_words(text_lower)
 
     # Check for cancel
     if words & CANCEL_KEYWORDS:
@@ -736,7 +741,7 @@ def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
     Returns list of matching catalogue entries (may be 0, 1, or multiple).
     """
     matches = []
-    text_words = set(text.lower().split())
+    text_words = _tokenize_words(text)
 
     for item in catalogue:
         for alias in item.get("aliases", []):

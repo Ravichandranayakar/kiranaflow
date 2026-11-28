@@ -466,3 +466,13 @@ class TestMultiItemParsing:
         assert result.draft.received == 24
         assert result.draft.damaged == 2
         assert result.draft.usable == 22
+
+    def test_whisper_punctuation_tolerated(self):
+        """Trailing periods/commas from Whisper STT ('4 kg daal.', 'Confirm.') match cleanly"""
+        parsed = parse_transcript("4 kg daal.", PendingDraft(), TEST_CATALOGUE, "en")
+        assert parsed.status == "complete"
+        assert parsed.entry is not None
+        assert parsed.entry.product_name == "Toor Dal 1kg"
+        assert parsed.entry.usable == 4
+        confirmed = parse_transcript("Confirm.", parsed.draft, TEST_CATALOGUE, "en")
+        assert confirmed.action == "confirm"

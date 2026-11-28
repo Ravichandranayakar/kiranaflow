@@ -10,21 +10,23 @@ Built for the Scaler × Wispr Flow Hackathon (Round 2). KiranaFlow lets shopkeep
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Browser (Chrome / Mobile-First React SPA)"]
+    subgraph Browser["Browser (Chrome / Brave / Firefox / Edge SPA)"]
         UI["Speak / Stock / History UI\n(React 18 + Tailwind)"]
-        Voice["Web Speech API\n(en-IN / hi-IN / kn-IN)"]
+        Voice["MediaRecorder + Audio VAD\n(Cross-Browser Mic Capture)"]
     end
 
     subgraph Compose["Docker Compose Stack (Zero API Keys)"]
         Nginx["Nginx (:8080 / :8085)\nStatic SPA + /api/ Proxy"]
         API["FastAPI Backend (:8000)\nPydantic v2 + SQLAlchemy 2.0"]
+        STT["Offline Whisper STT\n(faster-whisper base INT8)"]
         Parser["Deterministic Parser\n(backend/app/services/parser.py)"]
         DB[("PostgreSQL 16 (:5432 internal)\nproducts | product_aliases | stock_movements")]
     end
 
     Voice --> UI
-    UI -->|"HTTP JSON"| Nginx
+    UI -->|"Audio / JSON"| Nginx
     Nginx -->|"proxy_pass /api/"| API
+    API <--> STT
     API <--> Parser
     API <-->|"Atomic UPDATE + INSERT"| DB
 ```
@@ -151,7 +153,7 @@ docker compose up --build
 | **Health Check** | [http://localhost:8080/api/health](http://localhost:8080/api/health) | Verifies live `SELECT 1` DB connection and active parser mode |
 | **Local Vite Dev** | [http://localhost:5173](http://localhost:5173) | Optional dev mode via `cd frontend && npm install && npm run dev` |
 
-> **Voice & Offline Fallback:** Browser voice recognition uses Chrome's Web Speech API (`en-IN` / `hi-IN` / `kn-IN`) with WebRTC noise suppression and automatic `1.5s` silence stop. Every flow also works offline or in any browser via **Or type instead** and the 6 one-tap **Try a test case** chips.
+> **Universal Voice & Offline Fallback:** Voice capture uses standard browser `MediaRecorder` + adaptive `1.5s` silence detection paired with an offline `faster-whisper` backend endpoint (`/api/voice/transcribe`), so the mic works across **Chrome, Brave, Firefox, and Edge** with zero external API keys. Every flow also works via **Or type instead** and the 6 one-tap **Try a test case** chips.
 
 ---
 
@@ -184,6 +186,7 @@ docker compose up --build
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | `GET` | `/api/health` | PostgreSQL connectivity check (`SELECT 1`) and parser status |
+| `POST` | `/api/voice/transcribe` | Transcribe cross-browser `MediaRecorder` audio via offline Whisper |
 | `POST` | `/api/voice/parse` | Parse single- or multi-item utterance against 15 seeded SKUs |
 | `POST` | `/api/deliveries/confirm` | Atomically commit confirmed entry and enforce `idempotency_key` |
 | `POST` | `/api/deliveries/confirm-batch` | Atomically commit multi-item delivery entries in one transaction |
@@ -200,7 +203,7 @@ Full live-captured request/response JSON payloads are in [docs/08-api-reference.
 ```bash
 # Run standalone deterministic parser unit suite (no Docker or DB required)
 python -m pytest backend/tests/ -v
-# 36 passed in 0.31s
+# 37 passed in 0.43s
 
 # Type-check frontend
 cd frontend && npx tsc -b --noEmit
@@ -249,10 +252,11 @@ kiranaflow/
 │       │   ├── db_models.py      # Product, ProductAlias, StockMovement
 │       │   └── schemas.py        # Pydantic v2 API contracts
 │       ├── routes/
-│       │   ├── voice.py          # POST /api/voice/parse
-│       │   └── delivery.py       # POST /api/deliveries/confirm, GET /api/stock*
+│       │   ├── voice.py          # POST /api/voice/transcribe & /api/voice/parse
+│       │   └── delivery.py       # POST /api/deliveries/confirm*, /api/stock*
 │       └── services/
 │           ├── seed.py           # 15 pre-seeded Indian grocery SKUs + EN/HI/KN aliases
+│           ├── stt.py            # Offline faster-whisper transcription
 │           ├── catalogue_service.py
 │           └── parser.py         # Deterministic multilingual parser & state rules
 └── frontend/
@@ -264,7 +268,7 @@ kiranaflow/
         ├── hooks/useDeliveryFlow.ts
         ├── services/
         │   ├── api.ts            # Typed fetch client (/api/*)
-        │   └── speech.ts         # Web Speech API + Web Audio feedback
+        │   └── speech.ts         # Cross-browser MediaRecorder + TTS + chimes
         ├── i18n/translations.ts  # Full EN / HI / KN UI translations
         └── components/           # Header, HeroBanner, PendingReceiptCard, MicDial, StockView, HistoryView
 ```
@@ -275,9 +279,9 @@ kiranaflow/
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.12, FastAPI 0.115.6, Pydantic v2, SQLAlchemy 2.0, Uvicorn |
+| Backend | Python 3.12, FastAPI 0.115.6, Pydantic v2, SQLAlchemy 2.0, `faster-whisper`, Uvicorn |
 | Database | PostgreSQL 16 (`psycopg` v3 binary driver) |
 | Frontend | React 18, TypeScript 5.6, Vite 6, Tailwind CSS 3, Lucide Icons |
-| Voice Input | Browser Web Speech API (`en-IN`, `hi-IN`, `kn-IN`) + WebRTC mic constraints |
+| Voice Input | Universal `MediaRecorder` + WebRTC mic + offline Whisper (`base` INT8) |
 | Voice Output | Browser Web Speech Synthesis + Web Audio feedback chimes |
 | Runtime | Docker & Docker Compose (`db`, `backend`, `frontend` via Nginx) |

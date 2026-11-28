@@ -1,66 +1,13 @@
 /**
- * KiranaFlow — Browser Web Speech API & Audio Feedback Wrapper
+ * KiranaFlow — Cross-Browser Audio Capture, TTS Read-Back & Chimes
  *
  * - Zero API keys required.
- * - Uses SpeechRecognition (en-IN / hi-IN / kn-IN) with graceful fallback detection.
- * - Requests WebRTC noiseSuppression, echoCancellation, autoGainControl on mic start.
- * - Uses window.speechSynthesis for spoken read-back, falling back gracefully
- *   if no Indian language voice is installed on the host OS.
- * - Plays subtle Web Audio confirmation chimes without external audio files.
+ * - Uses standard MediaRecorder + WebRTC getUserMedia (works across Chrome, Brave, Firefox, Edge).
+ * - Audio uploads to FastAPI /api/voice/transcribe (offline faster-whisper STT).
+ * - Uses window.speechSynthesis for spoken read-back and Web Audio for feedback chimes.
  */
 
 import type { LangCode } from '../types/api';
-
-interface SpeechRecognitionAlternativeLike {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechRecognitionResultLike {
-  isFinal: boolean;
-  length: number;
-  item(index: number): SpeechRecognitionAlternativeLike;
-  [index: number]: SpeechRecognitionAlternativeLike;
-}
-
-interface SpeechRecognitionResultListLike {
-  length: number;
-  [index: number]: SpeechRecognitionResultLike;
-}
-
-interface SpeechRecognitionEventLike extends Event {
-  results: SpeechRecognitionResultListLike;
-}
-
-interface SpeechRecognitionErrorEventLike extends Event {
-  error: string;
-}
-
-export interface SpeechRecognitionLike extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onstart: ((ev: Event) => void) | null;
-  onaudiostart: ((ev: Event) => void) | null;
-  onsoundstart: ((ev: Event) => void) | null;
-  onspeechstart: ((ev: Event) => void) | null;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((ev: SpeechRecognitionErrorEventLike) => void) | null;
-  onend: ((ev: Event) => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  }
-}
 
 const LANG_LOCALE_MAP: Record<LangCode, string> = {
   en: 'en-IN',
@@ -69,78 +16,27 @@ const LANG_LOCALE_MAP: Record<LangCode, string> = {
 };
 
 export function isSpeechRecognitionSupported(): boolean {
-  if (typeof window === 'undefined') return false;
-  return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return typeof navigator.mediaDevices !== 'undefined' && typeof MediaRecorder !== 'undefined';
 }
 
-/** Detect browser engine so we can surface actionable mic diagnostics on Windows. */
-export function detectSpeechEnvironment(): { browser: string; warning: string | null } {
-  if (typeof navigator === 'undefined') {
-    return { browser: 'Unknown', warning: null };
+export function pickRecordingFormat(): { mimeType: string; filename: string } {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return { mimeType: '', filename: 'recording.webm' };
   }
-  const ua = navigator.userAgent;
-  const hasBrave = Boolean((navigator as unknown as { brave?: unknown }).brave);
-  if (hasBrave) {
-    return {
-      browser: 'Brave',
-      warning: 'Brave blocks Google Web Speech servers by default — open in Google Chrome or type below.',
-    };
-  }
-  if (/Edg\//i.test(ua)) {
-    return {
-      browser: 'Microsoft Edge',
-      warning: 'Edge often blocks Chrome Web Speech API — open in Google Chrome or use text below.',
-    };
-  }
-  if (/Firefox/i.test(ua)) {
-    return {
-      browser: 'Firefox',
-      warning: 'Firefox does not support Web Speech API — open in Google Chrome or type below.',
-    };
-  }
-  if (/Chrome/i.test(ua)) {
-    return { browser: 'Google Chrome', warning: null };
-  }
-  return {
-    browser: 'Embedded / Other Browser',
-    warning: 'Speech recognition requires Google Chrome — open this URL in Chrome or type below.',
-  };
-}
-
-export function createSpeechRecognition(lang: LangCode): SpeechRecognitionLike | null {
-  if (typeof window === 'undefined') return null;
-  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Ctor) return null;
-
-  const recognition = new Ctor();
-  recognition.lang = LANG_LOCALE_MAP[lang];
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
-  return recognition;
-}
-
-/**
- * Hint browser audio stack to enable noise suppression, echo cancellation,
- * and automatic gain control before starting speech recognition.
- * Immediately stops the probe stream so SpeechRecognition owns the mic cleanly.
- */
-export async function primeNoiseSuppressedMic(): Promise<void> {
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        noiseSuppression: true,
-        echoCancellation: true,
-        autoGainControl: true,
-      },
-    });
-    stream.getTracks().forEach((track) => track.stop());
-  } catch {
-    // Let SpeechRecognition surface permission errors if denied
-  }
+  const candidates: { mimeType: string; filename: string }[] = [
+    { mimeType: 'audio/webm;codecs=opus', filename: 'recording.webm' },
+    { mimeType: 'audio/webm', filename: 'recording.webm' },
+    { mimeType: 'audio/ogg;codecs=opus', filename: 'recording.ogg' },
+    { mimeType: 'audio/ogg', filename: 'recording.ogg' },
+    { mimeType: 'audio/mp4', filename: 'recording.mp4' },
+  ];
+  return (
+    candidates.find((c) => MediaRecorder.isTypeSupported(c.mimeType)) ?? {
+      mimeType: '',
+      filename: 'recording.webm',
+    }
+  );
 }
 
 export function speakText(text: string, lang: LangCode, muted = false): void {
@@ -155,7 +51,6 @@ export function speakText(text: string, lang: LangCode, muted = false): void {
     utterance.lang = targetLocale;
     utterance.rate = 0.98;
 
-    // Pick matching voice if installed; otherwise let browser default voice speak cleanly
     const voices = window.speechSynthesis.getVoices();
     const exactMatch = voices.find((v) => v.lang.toLowerCase() === targetLocale.toLowerCase());
     const prefixMatch = voices.find((v) => v.lang.toLowerCase().startsWith(lang));
@@ -186,7 +81,9 @@ let sharedAudioCtx: AudioContext | null = null;
 /** Play a brief, pleasant two-tone Web Audio chime on commit or mic start. */
 export function playTone(kind: 'start' | 'success'): void {
   if (typeof window === 'undefined') return;
-  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  const AudioCtx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioCtx) return;
 
   try {

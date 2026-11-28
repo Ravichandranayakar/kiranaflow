@@ -6,11 +6,11 @@ KiranaFlow uses a three-tier client–server architecture where **all linguistic
 
 ```mermaid
 flowchart LR
-    subgraph Client["Browser (Chrome / Mobile-First React SPA)"]
+    subgraph Client["Browser (Chrome / Brave / Firefox / Edge SPA)"]
         UI["React 18 + Tailwind UI\n(Speak / Stock / History)"]
-        Hook["useDeliveryFlow.ts\n(State Machine & Timers)"]
-        WebSpeech["Web Speech API\n(SpeechRecognition + SpeechSynthesis)"]
-        ApiClient["services/api.ts\n(/api/* JSON over Fetch)"]
+        Hook["useDeliveryFlow.ts\n(State Machine & Audio VAD)"]
+        WebSpeech["MediaRecorder + SpeechSynthesis\n(Cross-Browser Audio & TTS)"]
+        ApiClient["services/api.ts\n(/api/* JSON & FormData)"]
         UI <--> Hook
         Hook <--> WebSpeech
         Hook --> ApiClient
@@ -23,8 +23,10 @@ flowchart LR
 
     subgraph Backend["FastAPI Container (:8000)"]
         Routes["routes/voice.py & delivery.py\n(Pydantic v2 Contracts)"]
+        STT["services/stt.py\n(Offline faster-whisper base)"]
         Parser["services/parser.py\n(Deterministic EN/HI/KN Parser)"]
         CatSvc["services/catalogue_service.py\n& seed.py (15 SKUs)"]
+        Routes --> STT
         Routes --> Parser
         Routes --> CatSvc
     end

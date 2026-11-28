@@ -53,6 +53,29 @@ export function parseVoice(payload: ParseRequest): Promise<ParseResponse> {
   });
 }
 
+export async function transcribeVoice(audioBlob: Blob, filename: string): Promise<{ transcript: string }> {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, filename);
+
+  const response = await fetch(`${BASE_URL}/api/voice/transcribe`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Transcription failed (${response.status})`;
+    try {
+      const errBody = (await response.json()) as { detail?: string };
+      if (errBody.detail) detail = errBody.detail;
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(detail);
+  }
+
+  return (await response.json()) as { transcript: string };
+}
+
 export function confirmDelivery(payload: ConfirmRequest): Promise<ConfirmResponse> {
   return requestJson<ConfirmResponse>('/api/deliveries/confirm', {
     method: 'POST',

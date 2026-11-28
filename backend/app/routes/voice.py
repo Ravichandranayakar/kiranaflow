@@ -1,5 +1,9 @@
 """
-KiranaFlow — API Routes: Voice Parsing
+KiranaFlow — API Routes: Voice Parsing & Cross-Browser Speech Transcription
+
+POST /api/voice/transcribe
+  Transcribes uploaded browser MediaRecorder audio (.webm/.ogg/.mp4/.wav)
+  using the offline Whisper STT service (zero API keys, works on Chrome, Brave, Firefox, Edge).
 
 POST /api/voice/parse
   Receives a transcript + current draft, returns the next ParseResponse.
@@ -8,15 +12,49 @@ POST /api/voice/parse
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import os
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.schemas import ParseRequest, ParseResponse
 from app.services.catalogue_service import load_catalogue
 from app.services.parser import parse_transcript
+from app.services.stt import transcribe_audio_bytes
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+
+
+class TranscribeResponse(BaseModel):
+    transcript: str
+
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_voice_audio(audio: UploadFile = File(...)) -> TranscribeResponse:
+    """Transcribe an audio clip recorded via browser MediaRecorder."""
+    data = await audio.read()
+    if len(data) < 200:
+        return TranscribeResponse(transcript="")
+
+    _, ext = os.path.splitext(audio.filename or "")
+    if not ext:
+        ctype = (audio.content_type or "").lower()
+        if "ogg" in ctype:
+            ext = ".ogg"
+        elif "mp4" in ctype or "aac" in ctype:
+            ext = ".mp4"
+        elif "wav" in ctype:
+            ext = ".wav"
+        else:
+            ext = ".webm"
+
+    try:
+        transcript = transcribe_audio_bytes(data, suffix=ext)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Audio transcription failed: {exc}") from exc
+
+    return TranscribeResponse(transcript=transcript)
 
 
 @router.post("/parse", response_model=ParseResponse)

@@ -113,17 +113,8 @@ export function PendingReceiptCard({
           <div className="p-4 pt-3.5 space-y-3">
             <div className="min-h-[54px]">
               <p className="font-serif text-[19px] italic text-[#1b1c18] leading-[1.38]">
-                {interimTranscript ? (
-                  <>
-                    “{interimTranscript}
-                    <span className="kf-blinking-cursor" />”
-                  </>
-                ) : (
-                  <>
-                    {t.listeningPrompt}
-                    <span className="kf-blinking-cursor" />
-                  </>
-                )}
+                {interimTranscript || t.listeningPrompt}
+                <span className="kf-blinking-cursor" />
               </p>
             </div>
 

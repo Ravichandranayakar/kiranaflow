@@ -6,7 +6,7 @@
    ```bash
    docker compose up --build
    ```
-2. Open [http://localhost:8080](http://localhost:8080) in **Google Chrome** (or `http://localhost:8085` if `FRONTEND_PORT=8085` was used).
+2. Open [http://localhost:8080](http://localhost:8080) (or `http://localhost:8085` if `FRONTEND_PORT=8085` was used) in **Chrome, Brave, Firefox, or Edge**.
 3. Select your preferred display & read-back language in the top-right header:
    - **`E`** — English (`en-IN`)
    - **`हि`** — Hindi (`hi-IN`)
@@ -18,17 +18,18 @@
 
 ### Recording by Voice
 
-1. Tap the central circular **Tap to Speak** dial. A short start chime plays and Chrome asks for mic permission on first run.
+1. Tap the central circular **Tap to Speak** dial. A short start chime plays and the browser requests microphone permission on first run.
 2. Speak naturally in English, Hindi, Kannada, Hinglish, or Kanglish—for example:
    - `"24 milk packets bandide 2 odada ide"`
    - `"10 cheeni 2 kharab"`
    - `"10 fortune oil illa illa 12 packets 1 leaky"`
-3. **Automatic end detection:** Pause for `1.5 seconds` after finishing your sentence—KiranaFlow automatically stops the mic and submits to the backend (or tap the square stop hub manually). If no audio reaches Chrome within `4 seconds`, it prompts you and opens text fallback.
+   - `"1 kg onion and 4 kg daal"`
+3. **Automatic end detection:** Pause for `1.5 seconds` after finishing your sentence—KiranaFlow automatically stops recording and sends audio to `/api/voice/transcribe` (offline Whisper) → `/api/voice/parse`, or tap the square stop hub manually anytime.
 
 ### Using Text Fallback or Test Case Chips
 
-- Tap **Or type instead** below the mic dial to type any entry manually (useful in noisy environments or non-Chrome browsers).
-- Or tap any chip under **Try a test case** (`Normal entry`, `14 or 40?`, `Self-correction`, `Unknown product`, `Hindi sugar`).
+- Tap **Or type instead** below the mic dial to type any entry manually in noisy environments.
+- Or tap any chip under **Try a test case** (`Normal entry`, `14 or 40?`, `Self-correction`, `Unknown product`, `Hindi sugar`, `2 items at once`).
 
 ### Handling Clarification Cards
 
