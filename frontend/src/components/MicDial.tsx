@@ -161,7 +161,7 @@ export function MicDial({
   }
 
   return (
-    <section className="px-5 py-5 flex flex-col items-center justify-center gap-3 bg-[#eae8e2] mt-4 mx-5 rounded-xl shadow-sm">
+    <section className="px-5 py-5 flex flex-col items-center justify-center gap-2.5 bg-[#eae8e2] mt-4 mx-5 rounded-xl shadow-sm overflow-hidden">
       {/* Mic Permission / Fallback Notice */}
       {(!micSupported || micError) && (
         <div className="w-full rounded-lg bg-[#a56a2a]/12 border border-[#a56a2a]/35 px-3 py-2 text-center">
@@ -171,21 +171,25 @@ export function MicDial({
         </div>
       )}
 
-      {/* Weighing-Scale Dial with Outward Expanding Chartreuse Waves */}
-      <div className="relative flex items-center justify-center py-3">
+      {/* Weighing-Scale Dial with Contained Chartreuse Waves */}
+      <div
+        className={`relative flex items-center justify-center ${
+          isListening ? 'w-[180px] h-[180px]' : 'py-2'
+        }`}
+      >
         {isListening && (
           <>
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute w-36 h-36 rounded-full border-2 border-[#c6f26a] kf-wave-ring"
+              className="pointer-events-none absolute w-[124px] h-[124px] rounded-full border-2 border-[#c6f26a] shadow-[0_0_12px_rgba(198,242,106,0.35)] kf-wave-ring motion-reduce:animate-none"
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute w-36 h-36 rounded-full border-2 border-[#abd551] kf-wave-ring-delay-1"
+              className="pointer-events-none absolute w-[124px] h-[124px] rounded-full border-2 border-[#9dc643]/85 kf-wave-ring-delay-1 motion-reduce:animate-none"
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute w-36 h-36 rounded-full border border-[#c6f26a]/80 kf-wave-ring-delay-2"
+              className="pointer-events-none absolute w-[124px] h-[124px] rounded-full border border-[#c6f26a]/75 bg-[#c6f26a]/10 kf-wave-ring-delay-2 motion-reduce:animate-none"
             />
           </>
         )}
