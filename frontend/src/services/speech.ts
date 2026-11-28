@@ -42,6 +42,9 @@ export interface SpeechRecognitionLike extends EventTarget {
   interimResults: boolean;
   maxAlternatives: number;
   onstart: ((ev: Event) => void) | null;
+  onaudiostart: ((ev: Event) => void) | null;
+  onsoundstart: ((ev: Event) => void) | null;
+  onspeechstart: ((ev: Event) => void) | null;
   onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
   onerror: ((ev: SpeechRecognitionErrorEventLike) => void) | null;
   onend: ((ev: Event) => void) | null;
@@ -144,6 +147,8 @@ export function stopSpeaking(): void {
   }
 }
 
+let sharedAudioCtx: AudioContext | null = null;
+
 /** Play a brief, pleasant two-tone Web Audio chime on commit or mic start. */
 export function playTone(kind: 'start' | 'success'): void {
   if (typeof window === 'undefined') return;
@@ -151,7 +156,13 @@ export function playTone(kind: 'start' | 'success'): void {
   if (!AudioCtx) return;
 
   try {
-    const ctx = new AudioCtx();
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtx();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      void sharedAudioCtx.resume();
+    }
+    const ctx = sharedAudioCtx;
     const now = ctx.currentTime;
 
     const playBeep = (freq: number, offset: number, duration: number) => {

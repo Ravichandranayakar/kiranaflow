@@ -78,7 +78,7 @@ export function useDeliveryFlow() {
   const stopTimeoutRef = useRef<number | null>(null);
   const silenceTimeoutRef = useRef<number | null>(null);
   const noSpeechTimeoutRef = useRef<number | null>(null);
-  const manualStopRef = useRef<boolean>(false);
+  const manualStopHandlerRef = useRef<(() => void) | null>(null);
   const latestSpokenRef = useRef<string>('');
   const isStartingMicRef = useRef<boolean>(false);
   const draftRef = useRef<PendingDraft>(EMPTY_DRAFT);
@@ -359,23 +359,28 @@ export function useDeliveryFlow() {
     });
   }, []);
 
+  const clearMicTimers = useCallback(() => {
+    if (stopTimeoutRef.current !== null) {
+      window.clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+    if (silenceTimeoutRef.current !== null) {
+      window.clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (noSpeechTimeoutRef.current !== null) {
+      window.clearTimeout(noSpeechTimeoutRef.current);
+      noSpeechTimeoutRef.current = null;
+    }
+  }, []);
+
   const finalizeListening = useCallback(
-    (spokenText: string) => {
-      if (stopTimeoutRef.current !== null) {
-        window.clearTimeout(stopTimeoutRef.current);
-        stopTimeoutRef.current = null;
-      }
-      if (silenceTimeoutRef.current !== null) {
-        window.clearTimeout(silenceTimeoutRef.current);
-        silenceTimeoutRef.current = null;
-      }
-      if (noSpeechTimeoutRef.current !== null) {
-        window.clearTimeout(noSpeechTimeoutRef.current);
-        noSpeechTimeoutRef.current = null;
-      }
+    (recognition: SpeechRecognitionLike | null, spokenText: string) => {
+      if (recognition && recognitionRef.current !== recognition) return;
+      clearMicTimers();
       recognitionRef.current = null;
+      manualStopHandlerRef.current = null;
       isStartingMicRef.current = false;
-      manualStopRef.current = false;
       setInterimTranscript('');
 
       const cleaned = spokenText.trim();
@@ -391,7 +396,7 @@ export function useDeliveryFlow() {
         );
       }
     },
-    [submitTranscript],
+    [clearMicTimers, submitTranscript],
   );
 
   const stopListening = useCallback(() => {
@@ -405,11 +410,12 @@ export function useDeliveryFlow() {
     }
     const recognition = recognitionRef.current;
     if (!recognition) {
+      isStartingMicRef.current = false;
       setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
       return;
     }
 
-    manualStopRef.current = true;
+    manualStopHandlerRef.current?.();
     try {
       recognition.stop();
     } catch {
@@ -427,23 +433,36 @@ export function useDeliveryFlow() {
         } catch {
           // ignore
         }
-        finalizeListening(latestSpokenRef.current);
+        finalizeListening(recognition, latestSpokenRef.current);
       }
-    }, 250);
+    }, 300);
   }, [finalizeListening]);
 
   const toggleListening = useCallback(() => {
-    if (flowState === 'LISTENING' || recognitionRef.current) {
+    if (flowState === 'LISTENING') {
       stopListening();
       return;
     }
 
+    // Clean up any lingering previous recognition instance so a rapid re-tap never collides
+    if (recognitionRef.current) {
+      const stale = recognitionRef.current;
+      recognitionRef.current = null;
+      manualStopHandlerRef.current = null;
+      clearMicTimers();
+      try {
+        stale.abort();
+      } catch {
+        // ignore
+      }
+    }
+
     if (isStartingMicRef.current) {
-      return;
+      isStartingMicRef.current = false;
     }
 
     if (!micSupported) {
-      setMicError('Voice recognition is not supported in this browser — use the text input below.');
+      setMicError('Voice recognition requires Google Chrome — use the text box below.');
       return;
     }
 
@@ -451,7 +470,6 @@ export function useDeliveryFlow() {
     stopSpeaking();
     setMicError(null);
     latestSpokenRef.current = '';
-    manualStopRef.current = false;
 
     const recognition = createSpeechRecognition(langRef.current);
     if (!recognition) {
@@ -462,29 +480,65 @@ export function useDeliveryFlow() {
 
     recognitionRef.current = recognition;
     let finalSpoken = '';
+    let wasManualStop = false;
+    let audioStarted = false;
+    let soundDetected = false;
+    let lastSeenCombined = '';
+
+    manualStopHandlerRef.current = () => {
+      wasManualStop = true;
+    };
 
     recognition.onstart = () => {
+      if (recognitionRef.current !== recognition) return;
       isStartingMicRef.current = false;
       playTone('start');
       setFlowState('LISTENING');
       setInterimTranscript('');
 
-      // No audio heard within 4 s of mic open → show helpful error rather than hanging
+      // Only trigger no-audio timeout if zero sound/speech arrives within 6.5s
       if (noSpeechTimeoutRef.current !== null) {
         window.clearTimeout(noSpeechTimeoutRef.current);
       }
       noSpeechTimeoutRef.current = window.setTimeout(() => {
-        if (recognitionRef.current === recognition && !latestSpokenRef.current) {
-          setMicError('No audio heard — check your microphone in Chrome or type below.');
+        if (recognitionRef.current !== recognition) return;
+        if (!soundDetected && !latestSpokenRef.current) {
+          setMicError(
+            audioStarted
+              ? 'Mic is open, but no voice reached Chrome — check Windows default mic / mute switch or type below.'
+              : 'Chrome could not read audio from your mic — check mic permission or type below.',
+          );
           stopListening();
         }
-      }, 4000);
+      }, 6500);
     };
 
-    // Track last seen transcript to detect genuinely new speech vs Chrome re-firing stale interim
-    let lastSeenCombined = '';
+    recognition.onaudiostart = () => {
+      if (recognitionRef.current !== recognition) return;
+      audioStarted = true;
+    };
+
+    recognition.onsoundstart = () => {
+      if (recognitionRef.current !== recognition) return;
+      soundDetected = true;
+      if (noSpeechTimeoutRef.current !== null) {
+        window.clearTimeout(noSpeechTimeoutRef.current);
+        noSpeechTimeoutRef.current = null;
+      }
+    };
+
+    recognition.onspeechstart = () => {
+      if (recognitionRef.current !== recognition) return;
+      soundDetected = true;
+      if (noSpeechTimeoutRef.current !== null) {
+        window.clearTimeout(noSpeechTimeoutRef.current);
+        noSpeechTimeoutRef.current = null;
+      }
+    };
 
     recognition.onresult = (event) => {
+      if (recognitionRef.current !== recognition) return;
+      soundDetected = true;
       if (noSpeechTimeoutRef.current !== null) {
         window.clearTimeout(noSpeechTimeoutRef.current);
         noSpeechTimeoutRef.current = null;
@@ -511,15 +565,12 @@ export function useDeliveryFlow() {
       }
       setInterimTranscript(combined);
 
-      // Only restart silence timer when Chrome delivers genuinely NEW transcript content.
-      // Chrome fires onresult repeatedly with identical stale interim text — ignoring those
-      // prevents the silence timer from resetting indefinitely and the mic from hanging.
+      // Restart 1.5s silence auto-stop only when Chrome delivers genuinely new transcript words
       if (combined && combined !== lastSeenCombined) {
         lastSeenCombined = combined;
         if (silenceTimeoutRef.current !== null) {
           window.clearTimeout(silenceTimeoutRef.current);
         }
-        // 1.5 s of silence after the last NEW syllable → auto-stop & submit
         silenceTimeoutRef.current = window.setTimeout(() => {
           if (recognitionRef.current === recognition) {
             stopListening();
@@ -529,37 +580,47 @@ export function useDeliveryFlow() {
     };
 
     recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) return;
       isStartingMicRef.current = false;
-      if (event.error === 'aborted' && manualStopRef.current) {
-        finalizeListening(finalSpoken || latestSpokenRef.current);
+      if (event.error === 'aborted' && wasManualStop) {
+        finalizeListening(recognition, finalSpoken || latestSpokenRef.current);
         return;
       }
-      if (event.error === 'not-allowed') {
-        setMicError('Microphone permission denied — use the text input below.');
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setMicError('Microphone permission blocked in Chrome — allow mic in address bar or type below.');
+      } else if (event.error === 'audio-capture') {
+        setMicError('No working microphone found by Chrome — check Windows Sound input or type below.');
       } else if (event.error === 'no-speech') {
-        setMicError('No speech detected. Check your mic or type below.');
+        setMicError(
+          audioStarted && !soundDetected
+            ? 'Mic heard zero sound — check your Windows mic mute/input device or type below.'
+            : 'No speech recognized — speak closer to mic or type below.',
+        );
       } else if (event.error === 'network') {
-        setMicError('Browser speech service unreachable (use Chrome or type below).');
+        setMicError('Chrome speech-to-text service unreachable (use Google Chrome online or type below).');
       } else if (event.error !== 'aborted') {
         setMicError(`Mic error (${event.error}) — you can type below.`);
       }
-      finalizeListening('');
+      finalizeListening(recognition, '');
     };
 
     recognition.onend = () => {
       if (recognitionRef.current !== recognition) return;
-      finalizeListening(finalSpoken || latestSpokenRef.current);
+      finalizeListening(recognition, finalSpoken || latestSpokenRef.current);
     };
 
     try {
       recognition.start();
     } catch {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      manualStopHandlerRef.current = null;
       isStartingMicRef.current = false;
-      recognitionRef.current = null;
       setMicError('Could not start microphone — use text input below.');
       setFlowState('IDLE');
     }
-  }, [finalizeListening, flowState, micSupported, stopListening]);
+  }, [clearMicTimers, finalizeListening, flowState, micSupported, stopListening]);
 
   return {
     lang,
