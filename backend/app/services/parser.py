@@ -20,6 +20,7 @@ Rules implemented:
 
 from __future__ import annotations
 
+import difflib
 import re
 import uuid
 from typing import Dict, List, Optional, Tuple
@@ -844,38 +845,118 @@ def _partition_damage(
     return True, damage_numbers, received_numbers
 
 
-def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
-    """
-    Match spoken text against catalogue items using alias contains-matching.
-    Returns list of matching catalogue entries (may be 0, 1, or multiple).
-    """
-    matches = []
-    text_words = _tokenize_words(text)
+_GENERIC_PRODUCT_FILLER = {
+    "1kg", "5kg", "500ml", "500g", "100g", "70g", "1l", "small", "big",
+    "pack", "toned", "loose", "chhota", "chota", "bada", "sanna", "dodda",
+    "bandide", "aaya", "mila", "ide", "hai", "received", "came", "got",
+    "and", "or", "the", "of", "for", "with", "some", "from", "into", "only",
+    "in", "on", "to", "a", "an",
+}
+_NON_PRODUCT_TOKENS = (
+    _GENERIC_PRODUCT_FILLER
+    | set(ALL_NUMBERS.keys())
+    | set(UNIT_KEYWORDS.keys())
+    | DAMAGE_KEYWORDS
+    | CONFIRM_KEYWORDS
+    | CANCEL_KEYWORDS
+    | BOTH_KEYWORDS
+    | CORRECTION_MARKERS
+)
 
-    for item in catalogue:
-        for alias in item.get("aliases", []):
-            alias_lower = alias.lower()
-            # Exact word match for single-word aliases
-            if " " not in alias_lower:
-                if alias_lower in text_words:
-                    matches.append(item)
-                    break
-            else:
-                # Multi-word alias: check if all words appear in text
-                alias_words = alias_lower.split()
-                if all(w in text_words for w in alias_words):
-                    matches.append(item)
-                    break
 
-    # Deduplicate by product ID
+def _dedupe_items(items: List[Dict]) -> List[Dict]:
     seen_ids = set()
     unique = []
-    for m in matches:
+    for m in items:
         if m["id"] not in seen_ids:
             seen_ids.add(m["id"])
             unique.append(m)
-
     return unique
+
+
+def _item_significant_tokens(item: Dict) -> set:
+    tokens = set()
+    sources = [item.get("name", "")] + list(item.get("aliases", []))
+    for src in sources:
+        clean = _PUNCT_RE.sub(" ", src.lower().replace("-", " "))
+        for w in clean.split():
+            if len(w) >= 3 and not w.isdigit() and w not in _NON_PRODUCT_TOKENS:
+                tokens.add(w)
+                if w.endswith("s") and len(w) > 4:
+                    tokens.add(w[:-1])
+    return tokens
+
+
+def _match_product(text: str, catalogue: List[Dict]) -> List[Dict]:
+    """
+    Match spoken text against catalogue items in 3 safe tiers:
+      1. Exact alias / multi-word alias match
+      2. Short partial brand/product-word match (e.g. 'atta' -> 1kg/5kg variant prompt)
+      3. Strict same-initial fuzzy match for speech spellings (e.g. 'magi' -> 'maggi')
+    """
+    text_words = _tokenize_words(text)
+
+    # Tier 1: Exact word/phrase alias matching
+    exact_matches = []
+    for item in catalogue:
+        for alias in item.get("aliases", []):
+            alias_lower = alias.lower()
+            if " " not in alias_lower:
+                if alias_lower in text_words:
+                    exact_matches.append(item)
+                    break
+            else:
+                alias_words = alias_lower.split()
+                if all(w in text_words for w in alias_words):
+                    exact_matches.append(item)
+                    break
+
+    if exact_matches:
+        return _dedupe_items(exact_matches)
+
+    # Candidate query words (keep hyphen-split tokens, drop numbers/units/noise)
+    raw_query_words = _PUNCT_RE.sub(" ", text.lower().replace("-", " ")).split()
+    query_words = [
+        w for w in raw_query_words
+        if len(w) >= 3 and not w.isdigit() and w not in _NON_PRODUCT_TOKENS
+    ]
+    if not query_words:
+        return []
+
+    item_tokens = {item["id"]: _item_significant_tokens(item) for item in catalogue}
+
+    # Tier 2: Partial brand / product token matching ('atta', 'parle', 'oil', 'fortune')
+    token_matches = []
+    for item in catalogue:
+        toks = item_tokens[item["id"]]
+        for qw in query_words:
+            qw_sing = qw[:-1] if (qw.endswith("s") and len(qw) > 4) else qw
+            if qw in toks or qw_sing in toks:
+                token_matches.append(item)
+                break
+
+    if token_matches:
+        return _dedupe_items(token_matches)
+
+    # Tier 3: Conservative same-initial fuzzy spelling match ('magi' -> 'maggi', 'nandhini' -> 'nandini')
+    fuzzy_matches = []
+    for item in catalogue:
+        toks = [t for t in item_tokens[item["id"]] if len(t) >= 4]
+        matched = False
+        for qw in query_words:
+            if len(qw) < 4:
+                continue
+            for kw in toks:
+                if qw[0] != kw[0]:
+                    continue
+                if difflib.SequenceMatcher(None, qw, kw).ratio() >= 0.76:
+                    fuzzy_matches.append(item)
+                    matched = True
+                    break
+            if matched:
+                break
+
+    return _dedupe_items(fuzzy_matches)
 
 
 def _extract_unit(text: str) -> Optional[str]:

@@ -549,3 +549,31 @@ class TestMultiItemParsing:
         assert edited.status == "complete"
         assert edited.entries is not None
         assert [e.usable for e in edited.entries] == [5, 12]
+
+    def test_short_casual_and_fuzzy_names(self):
+        """Shopkeepers can say short/casual names ('magi', 'parle', 'fortune', 'atta') without '70g'/'1kg'"""
+        magi = parse_transcript("5 magi", PendingDraft(), TEST_CATALOGUE, "en")
+        assert magi.status == "complete"
+        assert magi.draft.product_name == "Maggi Noodles 70g"
+        assert magi.draft.usable == 5
+
+        parle = parse_transcript("10 parle", PendingDraft(), TEST_CATALOGUE, "en")
+        assert parle.status == "complete"
+        assert parle.draft.product_name == "Parle-G Biscuit Small"
+
+        fortune = parse_transcript("5 fortune", PendingDraft(), TEST_CATALOGUE, "en")
+        assert fortune.status == "complete"
+        assert fortune.draft.product_name == "Fortune Sunflower Oil 1L"
+
+        nandhini = parse_transcript("5 nandhini", PendingDraft(), TEST_CATALOGUE, "en")
+        assert nandhini.status == "complete"
+        assert nandhini.draft.product_name == "Nandini Toned Milk 500ml"
+
+        atta = parse_transcript("10 atta", PendingDraft(), TEST_CATALOGUE, "en")
+        assert atta.status == "clarify"
+        assert atta.question_kind == "variant"
+        assert len(atta.candidates or []) == 2
+
+        gold = parse_transcript("1 kg of gold", PendingDraft(), TEST_CATALOGUE, "en")
+        assert gold.status == "unknown"
+        assert gold.question_kind == "unknown_sku"
