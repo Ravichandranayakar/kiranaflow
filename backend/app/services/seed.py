@@ -74,8 +74,8 @@ SEED_CATALOGUE = [
     (
         "Toor Dal 1kg", "pulses", "kg", 5,
         {
-            "en": ["toor dal", "tur dal", "arhar dal", "dal"],
-            "hi": ["toor dal", "arhar dal", "dal"],
+            "en": ["toor dal", "tur dal", "arhar dal", "dal", "daal"],
+            "hi": ["toor dal", "arhar dal", "dal", "daal"],
             "kn": ["togari bele", "bele"],
         },
     ),

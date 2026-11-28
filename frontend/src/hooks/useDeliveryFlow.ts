@@ -21,7 +21,6 @@ import {
   createSpeechRecognition,
   isSpeechRecognitionSupported,
   playTone,
-  primeNoiseSuppressedMic,
   speakText,
   stopSpeaking,
   type SpeechRecognitionLike,
@@ -73,6 +72,7 @@ export function useDeliveryFlow() {
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const stopTimeoutRef = useRef<number | null>(null);
+  const silenceTimeoutRef = useRef<number | null>(null);
   const manualStopRef = useRef<boolean>(false);
   const latestSpokenRef = useRef<string>('');
   const isStartingMicRef = useRef<boolean>(false);
@@ -308,6 +308,10 @@ export function useDeliveryFlow() {
         window.clearTimeout(stopTimeoutRef.current);
         stopTimeoutRef.current = null;
       }
+      if (silenceTimeoutRef.current !== null) {
+        window.clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       recognitionRef.current = null;
       isStartingMicRef.current = false;
       manualStopRef.current = false;
@@ -330,6 +334,10 @@ export function useDeliveryFlow() {
   );
 
   const stopListening = useCallback(() => {
+    if (silenceTimeoutRef.current !== null) {
+      window.clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
     const recognition = recognitionRef.current;
     if (!recognition) {
       setFlowState(draftRef.current.awaiting_confirmation ? 'AWAITING_CONFIRMATION' : 'IDLE');
@@ -359,7 +367,7 @@ export function useDeliveryFlow() {
     }, 400);
   }, [finalizeListening]);
 
-  const toggleListening = useCallback(async () => {
+  const toggleListening = useCallback(() => {
     if (flowState === 'LISTENING' || recognitionRef.current) {
       stopListening();
       return;
@@ -379,7 +387,6 @@ export function useDeliveryFlow() {
     setMicError(null);
     latestSpokenRef.current = '';
     manualStopRef.current = false;
-    await primeNoiseSuppressedMic();
 
     const recognition = createSpeechRecognition(langRef.current);
     if (!recognition) {
@@ -410,14 +417,27 @@ export function useDeliveryFlow() {
           interim += text;
         }
       }
+      const combined = `${finalChunk} ${interim}`.trim();
       if (finalChunk.trim()) {
         finalSpoken = finalChunk.trim();
-        latestSpokenRef.current = finalSpoken;
+        latestSpokenRef.current = combined || finalSpoken;
         setTranscript(finalSpoken);
       } else if (interim.trim()) {
         latestSpokenRef.current = interim.trim();
       }
-      setInterimTranscript(interim.trim());
+      setInterimTranscript(combined);
+
+      // Auto-stop and submit 1.5s after the shopkeeper stops speaking (no second tap needed)
+      if (combined) {
+        if (silenceTimeoutRef.current !== null) {
+          window.clearTimeout(silenceTimeoutRef.current);
+        }
+        silenceTimeoutRef.current = window.setTimeout(() => {
+          if (recognitionRef.current === recognition) {
+            stopListening();
+          }
+        }, 1500);
+      }
     };
 
     recognition.onerror = (event) => {
