@@ -210,9 +210,11 @@ export function PendingReceiptCard({
   if (flowState === 'NEEDS_CLARIFICATION' && parseResult) {
     const qKind = parseResult.question_kind ?? '';
     const isTeenTens = qKind === 'teen_tens' && Boolean(draft.teen_tens_options?.length);
+    const isReceivedMissing = qKind === 'received_qty';
     const isDamagedMissing = qKind === 'damaged_qty' || qKind === 'damaged' || qKind === 'missing_damaged';
     const isUnknownSku = qKind === 'unknown_sku' || parseResult.status === 'unknown';
     const hasCandidates = Boolean(parseResult.candidates && parseResult.candidates.length > 0);
+    const queuedEntries = draft.queued_entries ?? [];
 
     const receivedDisplay =
       received !== null
@@ -281,6 +283,19 @@ export function PendingReceiptCard({
                 “{transcript}”
               </p>
             )}
+
+            {queuedEntries.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {queuedEntries.map((qe) => (
+                  <span
+                    key={qe.idempotency_key}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#c6f26a]/35 text-[#141f00] font-display text-[10px] font-semibold"
+                  >
+                    {t.queuedLabel}: {qe.product_name} (+{qe.usable})
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -325,7 +340,7 @@ export function PendingReceiptCard({
             </div>
           )}
 
-          {/* 4A: Variant / Candidate Tap List */}
+          {/* 4A: Variant / Candidate Tap List (+ Select All / Both option for multi-item intent) */}
           {hasCandidates && parseResult.candidates && (
             <div className="flex flex-col gap-2 pt-1">
               {parseResult.candidates.map((cand) => (
@@ -341,6 +356,37 @@ export function PendingReceiptCard({
                   <ArrowRight className="w-4 h-4 text-[#444748] shrink-0" />
                 </button>
               ))}
+              {parseResult.candidates.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => onClarifyPick('both')}
+                  className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#1c1b1b] text-[#c6f26a] font-display text-xs font-bold uppercase tracking-wide hover:opacity-90 transition-opacity"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  <span>
+                    {t.selectBothAllPrefix} ({parseResult.candidates.length} {t.itemsWord})
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Quick Received Quantity Pills (for multi-item clauses missing qty) */}
+          {isReceivedMissing && (
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 5, 10, 12, 24].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => onClarifyPick(String(n))}
+                    className="px-3.5 py-2 rounded-lg bg-[#1c1b1b] text-[#c6f26a] font-display text-xs font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    {n} {unitDisplay}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#747878]">{t.receivedPausedNote}</p>
             </div>
           )}
 
@@ -364,7 +410,7 @@ export function PendingReceiptCard({
           )}
 
           {/* Fallback when variant/unknown has zero candidates */}
-          {!hasCandidates && !isTeenTens && !isDamagedMissing && !isUnknownSku && (
+          {!hasCandidates && !isTeenTens && !isReceivedMissing && !isDamagedMissing && !isUnknownSku && (
             <p className="text-xs text-[#747878] pt-1">{t.sayProductAgain}</p>
           )}
 

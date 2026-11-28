@@ -476,3 +476,41 @@ class TestMultiItemParsing:
         assert parsed.entry.usable == 4
         confirmed = parse_transcript("Confirm.", parsed.draft, TEST_CATALOGUE, "en")
         assert confirmed.action == "confirm"
+
+    def test_variant_both_queues_multi_item(self):
+        """Saying 'both i told' when asked between two distinct SKUs queues both (and ignores digits in SKU names)"""
+        turn1 = parse_transcript("eggs maggi", PendingDraft(), TEST_CATALOGUE, "en")
+        assert turn1.status == "clarify"
+        assert turn1.question_kind == "variant"
+        assert turn1.draft.product_id is None
+
+        turn2 = parse_transcript("both i told", turn1.draft, TEST_CATALOGUE, "en")
+        assert turn2.status == "clarify"
+        assert turn2.question_kind == "received_qty"
+        assert turn2.draft.product_name == "Maggi Noodles 70g" or turn2.draft.product_name == "Eggs (12 pack)"
+
+        first_item = turn2.draft.product_name
+        turn3 = parse_transcript("5", turn2.draft, TEST_CATALOGUE, "en")
+        assert turn3.status == "clarify"
+        assert turn3.question_kind == "received_qty"
+        assert turn3.draft.product_name != first_item
+
+        turn4 = parse_transcript("10", turn3.draft, TEST_CATALOGUE, "en")
+        assert turn4.status == "complete"
+        assert turn4.entries is not None
+        assert len(turn4.entries) == 2
+        assert [e.usable for e in turn4.entries] == [5, 10]
+
+    def test_multi_item_without_second_qty_prompts_received_qty(self):
+        """'5 onion and maggi' resolves onion=5 then prompts received_qty for maggi"""
+        t1 = parse_transcript("5 onion and maggi", PendingDraft(), TEST_CATALOGUE, "en")
+        assert t1.status == "clarify"
+        assert t1.question_kind == "received_qty"
+        assert t1.draft.product_name == "Maggi Noodles 70g"
+
+        t2 = parse_transcript("6", t1.draft, TEST_CATALOGUE, "en")
+        assert t2.status == "complete"
+        assert t2.entries is not None
+        assert [e.usable for e in t2.entries] == [5, 6]
+        confirmed = parse_transcript("Confirm.", t2.draft, TEST_CATALOGUE, "en")
+        assert confirmed.action == "confirm"

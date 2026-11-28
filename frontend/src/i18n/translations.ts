@@ -152,6 +152,10 @@ export interface UIStrings {
   keyNotSetPrefix: string;
   keyPlaceholder: string;
   noOsVoiceNote: string;
+  selectBothAllPrefix: string;
+  itemsWord: string;
+  receivedPausedNote: string;
+  queuedLabel: string;
 }
 
 export const TRANSLATIONS: Record<LangCode, UIStrings> = {
@@ -307,6 +311,10 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     keyNotSetPrefix: 'Key not set',
     keyPlaceholder: 'Optional LLM_API_KEY (not required)',
     noOsVoiceNote: 'This device/browser has no local voice pack for this language — read-back still updates cleanly on screen.',
+    selectBothAllPrefix: 'Select All / Both',
+    itemsWord: 'items',
+    receivedPausedNote: 'Tap a quick quantity above, or speak/type the exact received count.',
+    queuedLabel: 'Queued',
   },
   hi: {
     serviceConnected: 'सेवा जुड़ी है',
@@ -460,6 +468,10 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     keyNotSetPrefix: 'कुंजी सेट नहीं है',
     keyPlaceholder: 'वैकल्पिक LLM_API_KEY (ज़रूरी नहीं)',
     noOsVoiceNote: 'इस डिवाइस/ब्राउज़र में हिन्दी आवाज़ पैक उपलब्ध नहीं है — स्क्रीन पर पूरा पाठ हिन्दी में ही दिखेगा।',
+    selectBothAllPrefix: 'दोनों / सभी चुनें',
+    itemsWord: 'आइटम',
+    receivedPausedNote: 'ऊपर संख्या चुनें या प्राप्त गिनती बोलकर/लिखकर बताएं।',
+    queuedLabel: 'कतार में',
   },
   kn: {
     serviceConnected: 'ಸೇವೆ ಸಂಪರ್ಕಗೊಂಡಿದೆ',
@@ -613,6 +625,10 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     keyNotSetPrefix: 'ಕೀ ಹೊಂದಿಸಲಾಗಿಲ್ಲ',
     keyPlaceholder: 'ಐಚ್ಛಿಕ LLM_API_KEY (ಅಗತ್ಯವಿಲ್ಲ)',
     noOsVoiceNote: 'ಈ ಬ್ರೌಸರ್/ಸಾಧನದಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಇಲ್ಲ — ಆದರೆ ಪರದೆಯ ಮೇಲಿನ ಪಠ್ಯ ಸಂಪೂರ್ಣ ಕನ್ನಡದಲ್ಲೇ ಇರುತ್ತದೆ.',
+    selectBothAllPrefix: 'ಎರಡನ್ನೂ / ಎಲ್ಲವನ್ನೂ ಆಯ್ಕೆಮಾಡಿ',
+    itemsWord: 'ವಸ್ತುಗಳು',
+    receivedPausedNote: 'ಮೇಲಿನ ಸಂಖ್ಯೆಯನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ ಅಥವಾ ಸ್ವೀಕರಿಸಿದ ಸಂಖ್ಯೆಯನ್ನು ಹೇಳಿ/ಟೈಪ್ ಮಾಡಿ.',
+    queuedLabel: 'ಸರದಿಯಲ್ಲಿ',
   },
 };
 
@@ -706,6 +722,13 @@ export function formatLocalizedQuestion(
     if (lang === 'hi') return `आपका मतलब कौन सा है: ${names}?`;
     if (lang === 'kn') return `ನೀವು ಹೇಳಿದ್ದು ಯಾವುದು: ${names}?`;
     return `Which one did you mean: ${names}?`;
+  }
+  if (kind === 'received_qty') {
+    const name = draft.product_name ?? (lang === 'hi' ? 'इस सामान' : lang === 'kn' ? 'ಈ ವಸ್ತುವಿನ' : 'this item');
+    const unitText = formatUnit(draft.unit, lang);
+    if (lang === 'hi') return `${name} के कितने ${unitText} मिले?`;
+    if (lang === 'kn') return `${name} ಎಷ್ಟು ${unitText} ಬಂದಿದೆ?`;
+    return `How many ${unitText} of ${name} did you receive?`;
   }
   if (kind === 'damaged_qty') {
     const name = draft.product_name ?? (lang === 'hi' ? 'इस सामान' : lang === 'kn' ? 'ಈ ವಸ್ತುವಿನ' : 'this item');

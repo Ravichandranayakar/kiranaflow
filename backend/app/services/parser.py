@@ -141,10 +141,13 @@ def _has_correction_marker(text_lower: str) -> bool:
     return bool(_CORRECTION_RE.search(text_lower))
 
 
+BOTH_KEYWORDS = {"both", "all", "dono", "sab", "eradu", "ellavu"}
+
+
 def _split_multi_clauses(text_lower: str, catalogue: List[Dict]) -> Optional[List[str]]:
     """
-    Split a sentence into independent product clauses only when 2+ clauses
-    each contain both a product match and a quantity (across 2+ distinct SKUs).
+    Split a sentence into independent product clauses whenever 2+ separator-split
+    clauses each match a product across 2+ distinct SKUs.
     Never splits single-item damage lists ('24 milk packets, 2 damaged') or
     self-corrections ('10 oil illa illa 12 oil').
     """
@@ -158,8 +161,7 @@ def _split_multi_clauses(text_lower: str, catalogue: List[Dict]) -> Optional[Lis
     valid_clauses: List[str] = []
     for part in raw_parts:
         part_matches = _match_product(part, catalogue)
-        part_nums = _extract_numbers(part)
-        if part_matches and part_nums:
+        if part_matches:
             valid_clauses.append(part)
             for m in part_matches:
                 matched_ids.add(m["id"])
@@ -204,7 +206,24 @@ def _finalize_multi_queue(
 
     while queue:
         next_clause = queue.pop(0)
-        res = _parse_single_turn(next_clause, PendingDraft(), catalogue, lang)
+        if next_clause.startswith("__pid:"):
+            parts = next_clause.split(":")
+            pid = int(parts[1])
+            preset_qty = int(parts[2]) if len(parts) > 2 and parts[2] else None
+            prod = next((c for c in catalogue if c["id"] == pid), None)
+            if prod is not None:
+                direct_draft = PendingDraft(
+                    product_id=prod["id"],
+                    product_name=prod["name"],
+                    received=preset_qty,
+                    unit=prod.get("default_unit", "packets"),
+                    idempotency_key=str(uuid.uuid4()),
+                )
+                res = _try_complete(direct_draft, next_clause, lang)
+            else:
+                res = _parse_single_turn(next_clause, PendingDraft(), catalogue, lang)
+        else:
+            res = _parse_single_turn(next_clause, PendingDraft(), catalogue, lang)
         if res.status == "complete" and res.entry is not None:
             collected.append(res.entry)
             continue
@@ -326,16 +345,16 @@ def _parse_single_turn(
         if unit is None:
             unit = matches[0].get("default_unit", "packets")
     elif len(matches) > 1:
-        # Ambiguous — need clarification
+        # Ambiguous — clear stale single-SKU fields from any earlier unfinished draft
+        new_draft.product_id = None
+        new_draft.product_name = None
+        new_draft.received = received_numbers[-1] if received_numbers else None
+        new_draft.damaged = damage_numbers[-1] if damage_numbers else None
+        new_draft.usable = None
         new_draft.pending_question_kind = "variant"
         new_draft.candidates = [
             Candidate(product_id=m["id"], product_name=m["name"]) for m in matches
         ]
-        # Still capture numbers so we don't lose them
-        if received_numbers:
-            new_draft.received = received_numbers[-1]
-        if damage_numbers:
-            new_draft.damaged = damage_numbers[-1]
         if unit:
             new_draft.unit = unit
 
@@ -425,8 +444,18 @@ def _merge_clarification(
     new_draft.pending_question_kind = None  # clear the pending question
 
     if kind == "variant":
-        # User picked a variant — match by name or ID from candidates
-        picked = _resolve_variant(text_lower, draft.candidates or [], catalogue)
+        words = _tokenize_words(text_lower)
+        candidates = draft.candidates or []
+        # User explicitly asked for BOTH / ALL listed candidates (e.g., "both i told", "both")
+        if len(candidates) >= 2 and (words & BOTH_KEYWORDS):
+            qty_suffix = f":{draft.received}" if draft.received is not None else ""
+            candidate_clauses = [f"__pid:{cand.product_id}{qty_suffix}" for cand in candidates]
+            prior = list(draft.queued_entries or [])
+            trailing = list(draft.queued_clauses or [])
+            return _finalize_multi_queue(prior, candidate_clauses + trailing, catalogue, lang, text_lower)
+
+        # User picked a single candidate
+        picked = _resolve_variant(text_lower, candidates, catalogue)
         if picked:
             new_draft.product_id = picked["id"]
             new_draft.product_name = picked["name"]
@@ -439,11 +468,11 @@ def _merge_clarification(
             return ParseResponse(
                 status="clarify",
                 question=_format_variant_question(
-                    [{"id": c.product_id, "name": c.product_name} for c in (draft.candidates or [])],
+                    [{"id": c.product_id, "name": c.product_name} for c in candidates],
                     lang,
                 ),
                 question_kind="variant",
-                candidates=draft.candidates,
+                candidates=candidates,
                 draft=new_draft,
                 raw_transcript=text_lower,
             )
@@ -473,6 +502,32 @@ def _merge_clarification(
                 status="clarify",
                 question=_format_teen_tens_question(options[0], options[1], lang),
                 question_kind="teen_tens",
+                draft=new_draft,
+                raw_transcript=text_lower,
+            )
+
+    elif kind == "received_qty":
+        numbers = _extract_numbers(text_lower)
+        if numbers:
+            qty = numbers[-1]
+            new_draft.received = qty
+            if qty in TEEN_TENS_PAIRS:
+                alt = TEEN_TENS_PAIRS[qty]
+                new_draft.pending_question_kind = "teen_tens"
+                new_draft.teen_tens_options = sorted([qty, alt])
+                return ParseResponse(
+                    status="clarify",
+                    question=_format_teen_tens_question(qty, alt, lang),
+                    question_kind="teen_tens",
+                    draft=new_draft,
+                    raw_transcript=text_lower,
+                )
+        else:
+            new_draft.pending_question_kind = "received_qty"
+            return ParseResponse(
+                status="clarify",
+                question=_format_received_qty_question(new_draft.product_name or "the item", new_draft.unit or "units", lang),
+                question_kind="received_qty",
                 draft=new_draft,
                 raw_transcript=text_lower,
             )
@@ -831,10 +886,11 @@ def _try_complete(
         )
 
     if new_draft.received is None:
+        new_draft.pending_question_kind = "received_qty"
         return ParseResponse(
             status="clarify",
-            question=f"How many {new_draft.unit or 'units'} of {new_draft.product_name} did you receive?",
-            question_kind="damaged_qty",
+            question=_format_received_qty_question(new_draft.product_name or "the item", new_draft.unit or "units", lang),
+            question_kind="received_qty",
             draft=new_draft,
             raw_transcript=transcript,
         )
@@ -950,6 +1006,14 @@ def _format_teen_tens_question(a: int, b: int, lang: str) -> str:
     if lang == "kn":
         return f"Neevu {low} heldira athava {high}?"
     return f"Did you say {low} or {high}?"
+
+
+def _format_received_qty_question(product_name: str, unit: str, lang: str) -> str:
+    if lang == "hi":
+        return f"{product_name} के कितने {unit} मिले?"
+    if lang == "kn":
+        return f"{product_name} ಎಷ್ಟು {unit} ಬಂದಿದೆ?"
+    return f"How many {unit} of {product_name} did you receive?"
 
 
 def _format_damaged_qty_question(product_name: str, lang: str) -> str:
