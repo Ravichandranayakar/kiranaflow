@@ -148,36 +148,58 @@ SEED_CATALOGUE = [
 
 def seed_catalogue(db: Session) -> None:
     """
-    Insert seed products and aliases if the products table is empty.
-    Idempotent: skips entirely if any product rows already exist.
+    Idempotently sync SEED_CATALOGUE products and aliases on startup.
+    Creates missing SKUs and inserts newly added aliases into existing
+    databases without altering live stock balances.
     """
-    existing_count = db.query(Product).count()
-    if existing_count > 0:
-        logger.info("Catalogue already seeded (%d products). Skipping.", existing_count)
-        return
+    existing_products = {p.name: p for p in db.query(Product).all()}
+    existing_aliases = {
+        (a.alias.lower().strip(), a.lang.lower().strip())
+        for a in db.query(ProductAlias.alias, ProductAlias.lang).all()
+    }
 
-    logger.info("Seeding %d products into the catalogue...", len(SEED_CATALOGUE))
+    added_products = 0
+    added_aliases = 0
 
     for name, category, default_unit, min_threshold, aliases_by_lang in SEED_CATALOGUE:
-        product = Product(
-            name=name,
-            category=category,
-            default_unit=default_unit,
-            min_threshold=min_threshold,
-            usable_stock=0,
-            damaged_stock=0,
-        )
-        db.add(product)
-        db.flush()  # get product.id before creating aliases
+        product = existing_products.get(name)
+        if product is None:
+            product = Product(
+                name=name,
+                category=category,
+                default_unit=default_unit,
+                min_threshold=min_threshold,
+                usable_stock=0,
+                damaged_stock=0,
+            )
+            db.add(product)
+            db.flush()  # get product.id before creating aliases
+            existing_products[name] = product
+            added_products += 1
 
         for lang, alias_list in aliases_by_lang.items():
+            lang_norm = lang.lower().strip()
             for alias_text in alias_list:
-                alias = ProductAlias(
-                    product_id=product.id,
-                    alias=alias_text.lower().strip(),
-                    lang=lang,
-                )
-                db.add(alias)
+                alias_norm = alias_text.lower().strip()
+                key = (alias_norm, lang_norm)
+                if key not in existing_aliases:
+                    db.add(
+                        ProductAlias(
+                            product_id=product.id,
+                            alias=alias_norm,
+                            lang=lang_norm,
+                        )
+                    )
+                    existing_aliases.add(key)
+                    added_aliases += 1
 
-    db.commit()
-    logger.info("Catalogue seeded successfully: %d products.", len(SEED_CATALOGUE))
+    if added_products or added_aliases:
+        db.commit()
+        logger.info(
+            "Catalogue synced: +%d products, +%d aliases (total %d SKUs).",
+            added_products,
+            added_aliases,
+            len(existing_products),
+        )
+    else:
+        logger.info("Catalogue already up to date (%d products).", len(existing_products))
