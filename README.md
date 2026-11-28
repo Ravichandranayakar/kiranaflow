@@ -49,7 +49,7 @@ flowchart LR
 
 ---
 
-## Use Case Diagram
+## Shopkeeper Delivery Workflows
 
 ```mermaid
 flowchart LR
@@ -90,11 +90,11 @@ flowchart LR
     UC08 -.->|"Clipboard message sent manually"| Supplier
 ```
 
-*Detailed use-case specs: [docs/03-use-cases.md](docs/03-use-cases.md)*
+*Detailed shopkeeper scenarios & workflow specs: [docs/03-use-cases.md](docs/03-use-cases.md)*
 
 ---
 
-## Activity Diagram (Parser Decision Flow)
+## How KiranaFlow Parses & Guards Speech
 
 ```mermaid
 flowchart TD
@@ -130,7 +130,7 @@ flowchart TD
     TryComplete -->|Valid| Ready(["usable = received - damaged\nawaiting_confirmation = true + readback_text"])
 ```
 
-*Full frontend state machine and rule tables: [docs/06-activity-state-machine.md](docs/06-activity-state-machine.md)*
+*Frontend state lifecycle & multilingual parser dictionaries: [docs/06-activity-state-machine.md](docs/06-activity-state-machine.md)*
 
 ---
 
@@ -213,10 +213,10 @@ Full verification results and PostgreSQL idempotency evidence are documented in 
 |----------|-------|
 | [01 — Problem & Solution](docs/01-problem-and-solution.md) | Kirana pain point, voice-first rationale, MVP scope boundaries |
 | [02 — Software Requirements (SRS)](docs/02-srs.md) | 12 functional + 6 non-functional requirements traced to source files |
-| [03 — Use Cases](docs/03-use-cases.md) | Mermaid use-case diagram & UC-01..UC-10 specifications |
-| [04 — System Architecture](docs/04-architecture.md) | Component, Docker deployment, and Level-0 DFD Mermaid diagrams |
-| [05 — Sequence Diagrams](docs/05-sequences.md) | Multi-turn `/api/voice/parse` loop & atomic `/api/deliveries/confirm` |
-| [06 — State Machine & Parser](docs/06-activity-state-machine.md) | Frontend state diagram, parser activity flowchart, linguistic tables |
+| [03 — Shopkeeper Delivery Workflows](docs/03-use-cases.md) | Shopkeeper, parser, and supplier interaction map (`UC-01`..`UC-10`) |
+| [04 — System Architecture](docs/04-architecture.md) | Docker Compose topology, Nginx proxy, and data flow diagrams |
+| [05 — Voice & Commit Sequences](docs/05-sequences.md) | Multi-turn `/api/voice/parse` loop & atomic `/api/deliveries/confirm` |
+| [06 — State Machine & Speech Parser](docs/06-activity-state-machine.md) | Delivery state machine, `parser.py` decision tree, and EN/HI/KN dictionaries |
 | [07 — Data Model](docs/07-data-model.md) | PostgreSQL ER diagram (`db_models.py`) & 15-SKU seed catalogue |
 | [08 — API Reference](docs/08-api-reference.md) | Verified live JSON payloads for all 5 endpoints |
 | [09 — Test Plan & Results](docs/09-test-plan-and-results.md) | `33 passed` pytest evidence, TypeScript check & idempotency proof |
