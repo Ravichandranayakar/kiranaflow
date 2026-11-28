@@ -73,6 +73,40 @@ export function isSpeechRecognitionSupported(): boolean {
   return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
+/** Detect browser engine so we can surface actionable mic diagnostics on Windows. */
+export function detectSpeechEnvironment(): { browser: string; warning: string | null } {
+  if (typeof navigator === 'undefined') {
+    return { browser: 'Unknown', warning: null };
+  }
+  const ua = navigator.userAgent;
+  const hasBrave = Boolean((navigator as unknown as { brave?: unknown }).brave);
+  if (hasBrave) {
+    return {
+      browser: 'Brave',
+      warning: 'Brave blocks Google Web Speech servers by default — open in Google Chrome or type below.',
+    };
+  }
+  if (/Edg\//i.test(ua)) {
+    return {
+      browser: 'Microsoft Edge',
+      warning: 'Edge often blocks Chrome Web Speech API — open in Google Chrome or use text below.',
+    };
+  }
+  if (/Firefox/i.test(ua)) {
+    return {
+      browser: 'Firefox',
+      warning: 'Firefox does not support Web Speech API — open in Google Chrome or type below.',
+    };
+  }
+  if (/Chrome/i.test(ua)) {
+    return { browser: 'Google Chrome', warning: null };
+  }
+  return {
+    browser: 'Embedded / Other Browser',
+    warning: 'Speech recognition requires Google Chrome — open this URL in Chrome or type below.',
+  };
+}
+
 export function createSpeechRecognition(lang: LangCode): SpeechRecognitionLike | null {
   if (typeof window === 'undefined') return null;
   const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
