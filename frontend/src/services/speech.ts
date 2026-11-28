@@ -15,6 +15,38 @@ const LANG_LOCALE_MAP: Record<LangCode, string> = {
   kn: 'kn-IN',
 };
 
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+function refreshVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return [];
+  try {
+    const list = window.speechSynthesis.getVoices();
+    if (list.length > 0) {
+      cachedVoices = list;
+    }
+  } catch {
+    // ignore
+  }
+  return cachedVoices;
+}
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  refreshVoices();
+  try {
+    window.speechSynthesis.addEventListener?.('voiceschanged', refreshVoices);
+  } catch {
+    // ignore
+  }
+}
+
+export function hasBrowserVoice(lang: LangCode): boolean {
+  const voices = refreshVoices();
+  const target = LANG_LOCALE_MAP[lang].toLowerCase();
+  return voices.some(
+    (v) => v.lang.toLowerCase() === target || v.lang.toLowerCase().startsWith(`${lang}-`) || v.lang.toLowerCase() === lang,
+  );
+}
+
 export function isSpeechRecognitionSupported(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
   return typeof navigator.mediaDevices !== 'undefined' && typeof MediaRecorder !== 'undefined';
@@ -51,13 +83,18 @@ export function speakText(text: string, lang: LangCode, muted = false): void {
     utterance.lang = targetLocale;
     utterance.rate = 0.98;
 
-    const voices = window.speechSynthesis.getVoices();
+    const voices = refreshVoices();
     const exactMatch = voices.find((v) => v.lang.toLowerCase() === targetLocale.toLowerCase());
-    const prefixMatch = voices.find((v) => v.lang.toLowerCase().startsWith(lang));
+    const prefixMatch = voices.find(
+      (v) => v.lang.toLowerCase().startsWith(`${lang}-`) || v.lang.toLowerCase() === lang,
+    );
     if (exactMatch) {
       utterance.voice = exactMatch;
     } else if (prefixMatch) {
       utterance.voice = prefixMatch;
+    } else if (lang !== 'en') {
+      // Avoid forcing non-Latin Unicode through an en-US/en-GB desktop voice that only reads English words
+      return;
     }
 
     window.speechSynthesis.speak(utterance);

@@ -133,6 +133,7 @@ function KiranaFlowShell() {
 
         <SettingsModal
           open={settingsOpen}
+          lang={lang}
           onClose={() => setSettingsOpen(false)}
           health={health}
           isMuted={isMuted}

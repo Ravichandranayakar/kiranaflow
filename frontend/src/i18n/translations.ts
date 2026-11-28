@@ -1,4 +1,4 @@
-import type { LangCode } from '../types/api';
+import type { LangCode, ParseResponse, PendingDraft, PendingEntry } from '../types/api';
 
 export interface UIStrings {
   serviceConnected: string;
@@ -108,6 +108,50 @@ export interface UIStrings {
   openStockLedger: string;
   draftReorder: string;
   reorderCopied: string;
+  badgeClarify: string;
+  badgeCorrected: string;
+  badgeVerifySave: string;
+  badgeSaved: string;
+  badgeReview: string;
+  batchBadge: string;
+  deliveryItemsSuffix: string;
+  totalUnitsLabel: string;
+  receivedWord: string;
+  damagedWord: string;
+  skusCountSuffix: string;
+  addItemBtn: string;
+  closeBtn: string;
+  addProductTitle: string;
+  addProductNamePlaceholder: string;
+  addProductAliasPlaceholder: string;
+  startingStockLabel: string;
+  lowAlertLabel: string;
+  addingBtn: string;
+  saveToCatalogueBtn: string;
+  noFilterMatches: string;
+  usableLabel: string;
+  returnLabel: string;
+  reasonPlaceholder: string;
+  savingShortBtn: string;
+  updateBtn: string;
+  cannotGoNegative: string;
+  removeSkuConfirm: string;
+  keepBtn: string;
+  confirmDeleteBtn: string;
+  removeSkuLink: string;
+  entriesSuffix: string;
+  usableDeltaWord: string;
+  dmgShortWord: string;
+  settingsTitle: string;
+  spokenReadbackTitle: string;
+  ttsSubtitle: string;
+  mutedBtn: string;
+  activeBtn: string;
+  optionalKeyTitle: string;
+  customKeyActiveNote: string;
+  keyNotSetPrefix: string;
+  keyPlaceholder: string;
+  noOsVoiceNote: string;
 }
 
 export const TRANSLATIONS: Record<LangCode, UIStrings> = {
@@ -219,6 +263,50 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     openStockLedger: 'Open Stock Ledger',
     draftReorder: 'Copy WhatsApp Reorder Draft',
     reorderCopied: 'Reorder draft copied!',
+    badgeClarify: 'CLARIFY',
+    badgeCorrected: 'CORRECTED',
+    badgeVerifySave: 'VERIFY & SAVE',
+    badgeSaved: 'SAVED',
+    badgeReview: 'REVIEW',
+    batchBadge: 'BATCH',
+    deliveryItemsSuffix: 'Delivery Items',
+    totalUnitsLabel: 'total units',
+    receivedWord: 'received',
+    damagedWord: 'damaged',
+    skusCountSuffix: 'SKUs',
+    addItemBtn: 'Add Item',
+    closeBtn: 'Close',
+    addProductTitle: 'Add New Product to Catalogue',
+    addProductNamePlaceholder: 'Product name (e.g. Amul Butter 100g)',
+    addProductAliasPlaceholder: 'Spoken aliases, comma-separated (e.g. amul butter, butter, makkhan)',
+    startingStockLabel: 'Starting Stock',
+    lowAlertLabel: 'Low Alert (<)',
+    addingBtn: 'Adding…',
+    saveToCatalogueBtn: 'Save to Store Catalogue',
+    noFilterMatches: 'No items match this filter.',
+    usableLabel: 'Usable',
+    returnLabel: 'Return',
+    reasonPlaceholder: 'Reason (e.g. Sold, Opening stock, Returned)',
+    savingShortBtn: 'Saving…',
+    updateBtn: 'Update',
+    cannotGoNegative: 'Cannot reduce stock below 0.',
+    removeSkuConfirm: 'Remove SKU & history?',
+    keepBtn: 'Keep',
+    confirmDeleteBtn: 'Confirm Delete',
+    removeSkuLink: 'Remove SKU from catalogue',
+    entriesSuffix: 'Entries',
+    usableDeltaWord: 'usable',
+    dmgShortWord: 'dmg',
+    settingsTitle: 'Settings & Key Status',
+    spokenReadbackTitle: 'Spoken Read-Back (TTS)',
+    ttsSubtitle: 'Browser speechSynthesis + on-screen text',
+    mutedBtn: 'Muted',
+    activeBtn: 'Active',
+    optionalKeyTitle: 'Optional Smart-Parse API Key',
+    customKeyActiveNote: 'Custom key entered locally (optional enhancement).',
+    keyNotSetPrefix: 'Key not set',
+    keyPlaceholder: 'Optional LLM_API_KEY (not required)',
+    noOsVoiceNote: 'This device/browser has no local voice pack for this language — read-back still updates cleanly on screen.',
   },
   hi: {
     serviceConnected: 'सेवा जुड़ी है',
@@ -328,6 +416,50 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     openStockLedger: 'स्टॉक बहीखाता खोलें',
     draftReorder: 'व्हाट्सएप रीऑर्डर ड्राफ्ट कॉपी करें',
     reorderCopied: 'रीऑर्डर ड्राफ्ट कॉपी हो गया!',
+    badgeClarify: 'स्पष्ट करें',
+    badgeCorrected: 'संशोधित',
+    badgeVerifySave: 'जांचें और सहेजें',
+    badgeSaved: 'सहेजा गया',
+    badgeReview: 'समीक्षा',
+    batchBadge: 'बैच',
+    deliveryItemsSuffix: 'डिलीवरी आइटम',
+    totalUnitsLabel: 'कुल इकाइयाँ',
+    receivedWord: 'प्राप्त',
+    damagedWord: 'खराब',
+    skusCountSuffix: 'सामान',
+    addItemBtn: 'सामान जोड़ें',
+    closeBtn: 'बंद करें',
+    addProductTitle: 'कैटलॉग में नया सामान जोड़ें',
+    addProductNamePlaceholder: 'सामान का नाम (उदा. Amul Butter 100g)',
+    addProductAliasPlaceholder: 'बोलचाल के नाम, कॉमा से अलग (उदा. amul butter, makkhan)',
+    startingStockLabel: 'शुरुआती स्टॉक',
+    lowAlertLabel: 'कम स्टॉक सीमा (<)',
+    addingBtn: 'जोड़ रहे हैं…',
+    saveToCatalogueBtn: 'कैटलॉग में सहेजें',
+    noFilterMatches: 'इस फ़िल्टर से कोई सामान मेल नहीं खाता।',
+    usableLabel: 'उपयोग योग्य',
+    returnLabel: 'वापसी',
+    reasonPlaceholder: 'कारण (उदा. बिक्री, शुरुआती स्टॉक, वापसी)',
+    savingShortBtn: 'सहेज रहे हैं…',
+    updateBtn: 'अपडेट करें',
+    cannotGoNegative: 'स्टॉक 0 से कम नहीं कर सकते।',
+    removeSkuConfirm: 'सामान और इतिहास हटाएं?',
+    keepBtn: 'रखें',
+    confirmDeleteBtn: 'हटाना पक्का करें',
+    removeSkuLink: 'कैटलॉग से हटाएं',
+    entriesSuffix: 'प्रविष्टियाँ',
+    usableDeltaWord: 'उपयोगी',
+    dmgShortWord: 'खराब',
+    settingsTitle: 'सेटिंग्स और कुंजी स्थिति',
+    spokenReadbackTitle: 'वॉयस पुष्टि (TTS)',
+    ttsSubtitle: 'ब्राउज़र आवाज़ + स्क्रीन पर पाठ',
+    mutedBtn: 'म्यूट',
+    activeBtn: 'चालू',
+    optionalKeyTitle: 'वैकल्पिक स्मार्ट-पार्स API कुंजी',
+    customKeyActiveNote: 'स्थानीय कस्टम कुंजी दर्ज है (वैकल्पिक)।',
+    keyNotSetPrefix: 'कुंजी सेट नहीं है',
+    keyPlaceholder: 'वैकल्पिक LLM_API_KEY (ज़रूरी नहीं)',
+    noOsVoiceNote: 'इस डिवाइस/ब्राउज़र में हिन्दी आवाज़ पैक उपलब्ध नहीं है — स्क्रीन पर पूरा पाठ हिन्दी में ही दिखेगा।',
   },
   kn: {
     serviceConnected: 'ಸೇವೆ ಸಂಪರ್ಕಗೊಂಡಿದೆ',
@@ -437,5 +569,168 @@ export const TRANSLATIONS: Record<LangCode, UIStrings> = {
     openStockLedger: 'ದಾಸ್ತಾನು ಲೆಡ್ಜರ್ ತೆರೆಯಿರಿ',
     draftReorder: 'ವಾಟ್ಸಾಪ್ ರೀಆರ್ಡರ್ ಡ್ರಾಫ್ಟ್ ನಕಲಿಸಿ',
     reorderCopied: 'ರೀಆರ್ಡರ್ ಡ್ರಾಫ್ಟ್ ನಕಲಿಸಲಾಗಿದೆ!',
+    badgeClarify: 'ಸ್ಪಷ್ಟಪಡಿಸಿ',
+    badgeCorrected: 'ತಿದ್ದುಪಡಿ',
+    badgeVerifySave: 'ಪರಿಶೀಲಿಸಿ ಉಳಿಸಿ',
+    badgeSaved: 'ಉಳಿಸಲಾಗಿದೆ',
+    badgeReview: 'ಪರಿಶೀಲನೆ',
+    batchBadge: 'ಬ್ಯಾಚ್',
+    deliveryItemsSuffix: 'ಡೆಲಿವರಿ ವಸ್ತುಗಳು',
+    totalUnitsLabel: 'ಒಟ್ಟು ಘಟಕಗಳು',
+    receivedWord: 'ಸ್ವೀಕರಿಸಿದ್ದು',
+    damagedWord: 'ಹಾಳಾದದ್ದು',
+    skusCountSuffix: 'ವಸ್ತುಗಳು',
+    addItemBtn: 'ಹೊಸ ವಸ್ತು',
+    closeBtn: 'ಮುಚ್ಚಿ',
+    addProductTitle: 'ಪಟ್ಟಿಗೆ ಹೊಸ ವಸ್ತು ಸೇರಿಸಿ',
+    addProductNamePlaceholder: 'ವಸ್ತುವಿನ ಹೆಸರು (ಉದಾ. Amul Butter 100g)',
+    addProductAliasPlaceholder: 'ಬಳಕೆಯ ಹೆಸರುಗಳು, ಕಾಮಾ ಹಾಕಿ (ಉದಾ. maida, mida)',
+    startingStockLabel: 'ಆರಂಭಿಕ ದಾಸ್ತಾನು',
+    lowAlertLabel: 'ಕಡಿಮೆ ಎಚ್ಚರಿಕೆ (<)',
+    addingBtn: 'ಸೇರಿಸಲಾಗುತ್ತಿದೆ…',
+    saveToCatalogueBtn: 'ದಾಸ್ತಾನು ಪಟ್ಟಿಗೆ ಉಳಿಸಿ',
+    noFilterMatches: 'ಈ ಫಿಲ್ಟರ್‌ಗೆ ಯಾವುದೇ ವಸ್ತು ಕಂಡುಬಂದಿಲ್ಲ.',
+    usableLabel: 'ಬಳಸಬಹುದಾದ',
+    returnLabel: 'ವಾಪಸ್',
+    reasonPlaceholder: 'ಕಾರಣ (ಉದಾ. ಮಾರಾಟ, ಆರಂಭಿಕ ದಾಸ್ತಾನು)',
+    savingShortBtn: 'ಉಳಿಸಲಾಗುತ್ತಿದೆ…',
+    updateBtn: 'ನವೀಕರಿಸಿ',
+    cannotGoNegative: 'ದಾಸ್ತಾನನ್ನು 0 ಕ್ಕಿಂತ ಕಡಿಮೆ ಮಾಡಲು ಆಗುವುದಿಲ್ಲ.',
+    removeSkuConfirm: 'ವಸ್ತು ಮತ್ತು ಇತಿಹಾಸ ಅಳಿಸಬೇಕೇ?',
+    keepBtn: 'ಇರಿಸಿ',
+    confirmDeleteBtn: 'ಅಳಿಸುವುದನ್ನು ದೃಢಪಡಿಸಿ',
+    removeSkuLink: 'ಪಟ್ಟಿಯಿಂದ ತೆಗೆದುಹಾಕಿ',
+    entriesSuffix: 'ನಮೂದುಗಳು',
+    usableDeltaWord: 'ಬಳಸಬಹುದಾದ',
+    dmgShortWord: 'ಹಾಳಾದ',
+    settingsTitle: 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಮತ್ತು ಕೀ ಸ್ಥಿತಿ',
+    spokenReadbackTitle: 'ಧ್ವನಿ ಪರಿಶೀಲನೆ (TTS)',
+    ttsSubtitle: 'ಬ್ರೌಸರ್ ಧ್ವನಿ + ಪರದೆಯ ಮೇಲಿನ ಪಠ್ಯ',
+    mutedBtn: 'ಮ್ಯೂಟ್',
+    activeBtn: 'ಸಕ್ರಿಯ',
+    optionalKeyTitle: 'ಐಚ್ಛಿಕ ಸ್ಮಾರ್ಟ್-ಪಾರ್ಸ್ API ಕೀ',
+    customKeyActiveNote: 'ಕಸ್ಟಮ್ ಕೀ ಸ್ಥಳೀಯವಾಗಿ ನೀಡಲಾಗಿದೆ (ಐಚ್ಛಿಕ).',
+    keyNotSetPrefix: 'ಕೀ ಹೊಂದಿಸಲಾಗಿಲ್ಲ',
+    keyPlaceholder: 'ಐಚ್ಛಿಕ LLM_API_KEY (ಅಗತ್ಯವಿಲ್ಲ)',
+    noOsVoiceNote: 'ಈ ಬ್ರೌಸರ್/ಸಾಧನದಲ್ಲಿ ಕನ್ನಡ ಧ್ವನಿ ಪ್ಯಾಕ್ ಇಲ್ಲ — ಆದರೆ ಪರದೆಯ ಮೇಲಿನ ಪಠ್ಯ ಸಂಪೂರ್ಣ ಕನ್ನಡದಲ್ಲೇ ಇರುತ್ತದೆ.',
   },
 };
+
+const UNIT_MAP: Record<string, Record<LangCode, string>> = {
+  kg: { en: 'kg', hi: 'किग्रा', kn: 'ಕೆಜಿ' },
+  packets: { en: 'packets', hi: 'पैकेट', kn: 'ಪ್ಯಾಕೆಟ್' },
+  packet: { en: 'packet', hi: 'पैकेट', kn: 'ಪ್ಯಾಕೆಟ್' },
+  bottles: { en: 'bottles', hi: 'बोतल', kn: 'ಬಾಟಲಿ' },
+  bottle: { en: 'bottle', hi: 'बोतल', kn: 'ಬಾಟಲಿ' },
+  crates: { en: 'crates', hi: 'पेटी', kn: 'ಕ್ರೇಟ್' },
+  crate: { en: 'crate', hi: 'पेटी', kn: 'ಕ್ರೇಟ್' },
+  pieces: { en: 'pieces', hi: 'पीस', kn: 'ಪೀಸ್' },
+  piece: { en: 'piece', hi: 'पीस', kn: 'ಪೀಸ್' },
+  dozens: { en: 'dozens', hi: 'दर्जन', kn: 'ಡಜನ್' },
+  dozen: { en: 'dozen', hi: 'दर्जन', kn: 'ಡಜನ್' },
+  leaves: { en: 'leaves', hi: 'पत्ते', kn: 'ಎಲೆಗಳು' },
+  bags: { en: 'bags', hi: 'बोरी', kn: 'ಚೀಲ' },
+  bag: { en: 'bag', hi: 'बोरी', kn: 'ಚೀಲ' },
+  trays: { en: 'trays', hi: 'ट्रे', kn: 'ಟ್ರೇ' },
+  tray: { en: 'tray', hi: 'ट्रे', kn: 'ಟ್ರೇ' },
+  boxes: { en: 'boxes', hi: 'डिब्बे', kn: 'ಬಾಕ್ಸ್' },
+  box: { en: 'box', hi: 'डिब्बा', kn: 'ಬಾಕ್ಸ್' },
+};
+
+export function formatUnit(unit: string | null | undefined, lang: LangCode): string {
+  if (!unit) return UNIT_MAP.packets[lang];
+  const key = unit.trim().toLowerCase();
+  return UNIT_MAP[key]?.[lang] ?? unit;
+}
+
+export function formatLocalizedReadback(entries: PendingEntry[], lang: LangCode): string {
+  if (entries.length === 0) return '';
+  if (entries.length === 1) {
+    const e = entries[0];
+    const u = formatUnit(e.unit, lang);
+    if (lang === 'hi') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name} प्राप्त हुए, ${e.damaged} खराब, ${e.usable} स्टॉक में जुड़ेंगे। सहेजने के लिए "हाँ" या "Confirm" बोलें।`
+        : `${e.received} ${u} ${e.product_name} प्राप्त हुए, कोई खराब नहीं, ${e.usable} स्टॉक में जुड़ेंगे। सहेजने के लिए "हाँ" या "Confirm" बोलें।`;
+    }
+    if (lang === 'kn') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name} ಬಂದಿದೆ, ${e.damaged} ಹಾಳಾಗಿದೆ, ${e.usable} ದಾಸ್ತಾನಿಗೆ ಸೇರಲಿದೆ. ಉಳಿಸಲು "ಸರಿ" ಅಥವಾ "Confirm" ಹೇಳಿ.`
+        : `${e.received} ${u} ${e.product_name} ಬಂದಿದೆ, ಹಾಳಾದದ್ದು ಇಲ್ಲ, ${e.usable} ದಾಸ್ತಾನಿಗೆ ಸೇರಲಿದೆ. ಉಳಿಸಲು "ಸರಿ" ಅಥವಾ "Confirm" ಹೇಳಿ.`;
+    }
+    return e.damaged > 0
+      ? `${e.received} ${u} of ${e.product_name} received, ${e.damaged} damaged, adding ${e.usable} usable to stock. Say Confirm to save, or tell me what to change.`
+      : `${e.received} ${u} of ${e.product_name} received, none damaged, adding ${e.usable} to stock. Say Confirm to save, or tell me what to change.`;
+  }
+
+  const parts = entries.map((e) => {
+    const u = formatUnit(e.unit, lang);
+    if (lang === 'hi') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name} (${e.damaged} खराब, ${e.usable} उपयोगी)`
+        : `${e.usable} ${u} ${e.product_name}`;
+    }
+    if (lang === 'kn') {
+      return e.damaged > 0
+        ? `${e.received} ${u} ${e.product_name} (${e.damaged} ಹಾಳಾದ, ${e.usable} ಬಳಕೆ)`
+        : `${e.usable} ${u} ${e.product_name}`;
+    }
+    return e.damaged > 0
+      ? `${e.received} ${u} ${e.product_name} (${e.damaged} damaged, ${e.usable} usable)`
+      : `${e.usable} ${u} ${e.product_name}`;
+  });
+  const joined = parts.join('; ');
+  if (lang === 'hi') {
+    return `${entries.length} आइटम तैयार हैं: ${joined}। सभी को सहेजने के लिए "हाँ" या "Confirm" बोलें।`;
+  }
+  if (lang === 'kn') {
+    return `${entries.length} ವಸ್ತುಗಳು ಸಿದ್ಧವಾಗಿವೆ: ${joined}. ಎಲ್ಲವನ್ನೂ ಉಳಿಸಲು "ಸರಿ" ಅಥವಾ "Confirm" ಹೇಳಿ.`;
+  }
+  return `${entries.length} items ready: ${joined}. Say Confirm to save all, or review below.`;
+}
+
+export function formatLocalizedQuestion(
+  parseResult: ParseResponse,
+  draft: PendingDraft,
+  lang: LangCode,
+): string | null {
+  const kind = parseResult.question_kind;
+  if (kind === 'teen_tens' && draft.teen_tens_options && draft.teen_tens_options.length >= 2) {
+    const [low, high] = [...draft.teen_tens_options].sort((a, b) => a - b);
+    if (lang === 'hi') return `क्या आपने ${low} बोला या ${high}?`;
+    if (lang === 'kn') return `ನೀವು ${low} ಹೇಳಿದಿರಾ ಅಥವಾ ${high}?`;
+    return `Did you say ${low} or ${high}?`;
+  }
+  if (kind === 'variant' && parseResult.candidates && parseResult.candidates.length > 0) {
+    const names = parseResult.candidates.map((c) => c.product_name).join(lang === 'en' ? ' or ' : lang === 'hi' ? ' या ' : ' ಅಥವಾ ');
+    if (lang === 'hi') return `आपका मतलब कौन सा है: ${names}?`;
+    if (lang === 'kn') return `ನೀವು ಹೇಳಿದ್ದು ಯಾವುದು: ${names}?`;
+    return `Which one did you mean: ${names}?`;
+  }
+  if (kind === 'damaged_qty') {
+    const name = draft.product_name ?? (lang === 'hi' ? 'इस सामान' : lang === 'kn' ? 'ಈ ವಸ್ತುವಿನ' : 'this item');
+    if (lang === 'hi') return `${name} के कितने पैकेट/इकाइयाँ खराब हैं?`;
+    if (lang === 'kn') return `${name} ಎಷ್ಟು ಹಾಳಾಗಿದೆ?`;
+    return `How many ${name} are damaged?`;
+  }
+  if (kind === 'unknown_sku') {
+    const raw = parseResult.raw_transcript ?? '';
+    if (lang === 'hi') return `'${raw}' कैटलॉग में नहीं मिला। ब्रांड का नाम फिर बोलें या नीचे से चुनें।`;
+    if (lang === 'kn') return `'${raw}' ಪಟ್ಟಿಯಲ್ಲಿ ಸಿಗಲಿಲ್ಲ. ವಸ್ತುವಿನ ಹೆಸರನ್ನು ಮತ್ತೆ ಹೇಳಿ ಅಥವಾ ಕೆಳಗಿನಿಂದ ಆಯ್ಕೆಮಾಡಿ.`;
+    return `I don't have '${raw}' in the catalogue. Say the brand name again or tap to pick.`;
+  }
+  return parseResult.question ?? null;
+}
+
+export function formatCommitSpeech(entries: PendingEntry[], lang: LangCode): string {
+  if (entries.length > 1) {
+    const total = entries.reduce((sum, e) => sum + e.usable, 0);
+    if (lang === 'hi') return `${entries.length} आइटम, कुल ${total} उपयोगी स्टॉक में सहेजे गए। अगला सामान बोलें।`;
+    if (lang === 'kn') return `${entries.length} ವಸ್ತುಗಳು, ಒಟ್ಟು ${total} ದಾಸ್ತಾನಿನಲ್ಲಿ ಉಳಿಸಲಾಗಿದೆ. ಮುಂದಿನ ವಸ್ತು ಹೇಳಿ.`;
+    return `Saved ${entries.length} items, ${total} total usable. Next item?`;
+  }
+  const usable = entries[0]?.usable ?? 0;
+  if (lang === 'hi') return `${usable} उपयोगी स्टॉक सहेजा गया। अगला सामान बोलें।`;
+  if (lang === 'kn') return `${usable} ಬಳಸಬಹುದಾದ ದಾಸ್ತಾನು ಉಳಿಸಲಾಗಿದೆ. ಮುಂದಿನ ವಸ್ತು ಹೇಳಿ.`;
+  return `Saved ${usable} usable. Next item?`;
+}

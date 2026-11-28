@@ -30,6 +30,11 @@ import {
   stopSpeaking,
 } from '../services/speech';
 import {
+  formatCommitSpeech,
+  formatLocalizedQuestion,
+  formatLocalizedReadback,
+} from '../i18n/translations';
+import {
   EMPTY_DRAFT,
   type ConfirmBatchResponse,
   type ConfirmResponse,
@@ -162,14 +167,7 @@ export function useDeliveryFlow() {
 
         if (res.status === 'committed' || res.status === 'duplicate') {
           playTone('success');
-          const totalUsable = entriesToCommit.reduce((sum, e) => sum + e.usable, 0);
-          speakText(
-            entriesToCommit.length > 1
-              ? `Saved ${entriesToCommit.length} items, ${totalUsable} total usable. Next item?`
-              : `Saved ${entriesToCommit[0].usable} usable. Next item?`,
-            langRef.current,
-            isMuted,
-          );
+          speakText(formatCommitSpeech(entriesToCommit, langRef.current), langRef.current, isMuted);
           setLastCommitted({
             entry: entriesToCommit[0],
             entries: entriesToCommit,
@@ -220,13 +218,24 @@ export function useDeliveryFlow() {
 
       if (res.status === 'complete' && res.draft.awaiting_confirmation) {
         setFlowState('AWAITING_CONFIRMATION');
-        if (res.readback_text) {
-          speakText(res.readback_text, langRef.current, isMuted);
+        const entries =
+          res.entries && res.entries.length > 0
+            ? res.entries
+            : res.entry
+              ? [res.entry]
+              : [];
+        const spokenReadback =
+          entries.length > 0
+            ? formatLocalizedReadback(entries, langRef.current)
+            : (res.readback_text ?? '');
+        if (spokenReadback) {
+          speakText(spokenReadback, langRef.current, isMuted);
         }
       } else if (res.status === 'clarify' || res.status === 'unknown') {
         setFlowState('NEEDS_CLARIFICATION');
-        if (res.question) {
-          speakText(res.question, langRef.current, isMuted);
+        const spokenQ = formatLocalizedQuestion(res, res.draft, langRef.current);
+        if (spokenQ) {
+          speakText(spokenQ, langRef.current, isMuted);
         }
       } else if (res.status === 'error') {
         if (res.question_kind === 'noise' && !res.raw_transcript) {
@@ -404,15 +413,16 @@ export function useDeliveryFlow() {
     });
     setParseResult((prev) => {
       if (!prev || !prev.entry) return prev;
+      const updatedEntry = {
+        ...prev.entry,
+        received,
+        damaged,
+        usable,
+      };
       return {
         ...prev,
-        entry: {
-          ...prev.entry,
-          received,
-          damaged,
-          usable,
-        },
-        readback_text: `Updated to ${received} ${prev.entry.unit} of ${prev.entry.product_name}, ${damaged} damaged, ${usable} usable. Tap Confirm to save.`,
+        entry: updatedEntry,
+        readback_text: formatLocalizedReadback([updatedEntry], langRef.current),
       };
     });
   }, []);

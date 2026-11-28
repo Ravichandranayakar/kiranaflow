@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, AudioLines, BookOpen, Check, CheckCheck, HelpCircle, Loader2, Pencil, Volume2, X } from 'lucide-react';
 import type { CommittedReceipt } from '../hooks/useDeliveryFlow';
-import { speakText } from '../services/speech';
-import { TRANSLATIONS } from '../i18n/translations';
+import { speakText, hasBrowserVoice } from '../services/speech';
+import {
+  formatLocalizedQuestion,
+  formatLocalizedReadback,
+  formatUnit,
+  TRANSLATIONS,
+} from '../i18n/translations';
 import type {
   FlowState,
   LangCode,
@@ -68,6 +73,33 @@ export function PendingReceiptCard({
   const usable = entry?.usable ?? draft.usable;
   const productName = entry?.product_name ?? draft.product_name;
   const unit = entry?.unit ?? draft.unit;
+  const unitDisplay = formatUnit(unit, lang);
+  const localizedQuestion = parseResult
+    ? formatLocalizedQuestion(parseResult, draft, lang)
+    : null;
+  const readbackEntries =
+    parseResult?.entries && parseResult.entries.length > 0
+      ? parseResult.entries
+      : entry
+        ? [entry]
+        : draft.product_id !== null && productName && received !== null && usable !== null
+          ? [
+              {
+                product_id: draft.product_id,
+                product_name: productName,
+                received,
+                damaged: damaged ?? 0,
+                usable,
+                unit: unit ?? 'packets',
+                idempotency_key: draft.idempotency_key ?? '',
+              },
+            ]
+          : [];
+  const localizedReadback =
+    readbackEntries.length > 0
+      ? formatLocalizedReadback(readbackEntries, lang)
+      : (parseResult?.readback_text ?? '');
+  const browserHasVoice = lang === 'en' || hasBrowserVoice(lang);
 
   useEffect(() => {
     setIsEditing(false);
@@ -184,9 +216,9 @@ export function PendingReceiptCard({
 
     const receivedDisplay =
       received !== null
-        ? `${received}${unit ? ` ${unit}` : ''}`
+        ? `${received}${unit ? ` ${unitDisplay}` : ''}`
         : isTeenTens && draft.teen_tens_options
-          ? `${draft.teen_tens_options.join(' or ')}?`
+          ? `${draft.teen_tens_options.join(' / ')}?`
           : t.unspecifiedLabel;
 
     return (
@@ -268,9 +300,9 @@ export function PendingReceiptCard({
             </button>
           </div>
 
-          {parseResult.question && (
+          {(localizedQuestion ?? parseResult.question) && (
             <p className="font-display text-[16px] font-semibold text-[#1b1c18] leading-snug">
-              {parseResult.question}
+              {localizedQuestion ?? parseResult.question}
             </p>
           )}
 
@@ -286,7 +318,7 @@ export function PendingReceiptCard({
                 >
                   <span className="font-display text-2xl font-bold leading-none">{opt}</span>
                   <span className="font-mono text-[10px] uppercase tracking-wider text-[#c6f26a]/85 mt-1">
-                    {unit ?? 'packets'}
+                    {unitDisplay}
                   </span>
                 </button>
               ))}
@@ -393,12 +425,12 @@ export function PendingReceiptCard({
                         {item.product_name}
                       </p>
                       <p className="text-[11px] text-[#747878]">
-                        {item.received} {item.unit} received
-                        {item.damaged > 0 ? ` • ${item.damaged} damaged` : ''}
+                        {item.received} {formatUnit(item.unit, lang)} {t.receivedWord}
+                        {item.damaged > 0 ? ` • ${item.damaged} ${t.damagedWord}` : ''}
                       </p>
                     </div>
                     <span className="font-display text-sm font-extrabold text-[#39734c] shrink-0">
-                      +{item.usable} {item.unit}
+                      +{item.usable} {formatUnit(item.unit, lang)}
                     </span>
                   </div>
                 ))}
@@ -419,7 +451,7 @@ export function PendingReceiptCard({
                         {committedEntry.received}
                       </span>
                       <span className="font-mono text-[10px] font-semibold text-[#747878] uppercase">
-                        {committedEntry.unit}
+                        {formatUnit(committedEntry.unit, lang)}
                       </span>
                     </div>
                   </div>
@@ -451,7 +483,7 @@ export function PendingReceiptCard({
                           committedEntry.damaged > 0 ? 'text-[#b54a42]/80' : 'text-[#747878]'
                         }`}
                       >
-                        {committedEntry.unit}
+                        {formatUnit(committedEntry.unit, lang)}
                       </span>
                     </div>
                   </div>
@@ -468,7 +500,7 @@ export function PendingReceiptCard({
                   +{totalBatchUsable}
                 </span>
                 <span className="font-mono text-xs font-bold uppercase">
-                  {committedBatch ? 'total units' : committedEntry.unit}
+                  {committedBatch ? t.totalUnitsLabel : formatUnit(committedEntry.unit, lang)}
                 </span>
               </div>
               <p className="text-[11px] text-[#141f00]/80 pt-1">
@@ -524,17 +556,17 @@ export function PendingReceiptCard({
 
   const badge = (() => {
     if (flowState === 'NEEDS_CLARIFICATION') {
-      return { label: 'CLARIFY', cls: 'bg-[#a56a2a]/15 text-[#a56a2a]' };
+      return { label: t.badgeClarify, cls: 'bg-[#a56a2a]/15 text-[#a56a2a]' };
     }
     if (flowState === 'AWAITING_CONFIRMATION') {
       return draft.was_corrected
-        ? { label: 'CORRECTED', cls: 'bg-[#c6f26a] text-[#141f00]' }
-        : { label: 'VERIFY & SAVE', cls: 'bg-[#c6f26a] text-[#141f00]' };
+        ? { label: t.badgeCorrected, cls: 'bg-[#c6f26a] text-[#141f00]' }
+        : { label: t.badgeVerifySave, cls: 'bg-[#c6f26a] text-[#141f00]' };
     }
     if (flowState === 'COMMITTED') {
-      return { label: 'SAVED', cls: 'bg-[#39734c] text-white' };
+      return { label: t.badgeSaved, cls: 'bg-[#39734c] text-white' };
     }
-    return { label: 'REVIEW', cls: 'bg-[#dedad1]/70 text-[#444748]' };
+    return { label: t.badgeReview, cls: 'bg-[#dedad1]/70 text-[#444748]' };
   })();
 
   const isClarifying =
@@ -578,10 +610,10 @@ export function PendingReceiptCard({
           {multiEntries ? (
             <div className="flex items-center justify-between gap-2 pb-1 border-b border-[#eae8e2]">
               <span className="font-display text-xs font-semibold text-[#1b1c18]">
-                {multiEntries.length} Delivery Items
+                {multiEntries.length} {t.deliveryItemsSuffix}
               </span>
               <span className="font-display text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#c6f26a] text-[#141f00] font-bold shrink-0">
-                BATCH
+                {t.batchBadge}
               </span>
             </div>
           ) : (
@@ -592,7 +624,7 @@ export function PendingReceiptCard({
                 </span>
                 {unit && (
                   <span className="font-display text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#f5f3ed] text-[#444748] shrink-0">
-                    {unit}
+                    {unitDisplay}
                   </span>
                 )}
               </div>
@@ -607,13 +639,13 @@ export function PendingReceiptCard({
           )}
 
           {/* Clarification Prompt & One-Tap Options */}
-          {isClarifying && parseResult?.question && (
+          {isClarifying && (localizedQuestion ?? parseResult?.question) && (
             <div className="rounded-lg bg-[#a56a2a]/10 border border-[#a56a2a]/35 p-3 space-y-2.5">
               <p className="text-xs font-medium text-[#7c4d19] leading-snug">
-                {parseResult.question}
+                {localizedQuestion ?? parseResult?.question}
               </p>
 
-              {parseResult.question_kind === 'teen_tens' && draft.teen_tens_options && (
+              {parseResult?.question_kind === 'teen_tens' && draft.teen_tens_options && (
                 <div className="flex flex-wrap gap-2">
                   {draft.teen_tens_options.map((opt) => (
                     <button
@@ -622,13 +654,13 @@ export function PendingReceiptCard({
                       onClick={() => onClarifyPick(String(opt))}
                       className="px-4 py-1.5 rounded-lg bg-[#1c1b1b] text-[#c6f26a] font-display text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
-                      {opt} {unit ?? 'packets'}
+                      {opt} {unitDisplay}
                     </button>
                   ))}
                 </div>
               )}
 
-              {parseResult.candidates && parseResult.candidates.length > 0 && (
+              {parseResult?.candidates && parseResult.candidates.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {parseResult.candidates.map((cand) => (
                     <button
@@ -719,22 +751,22 @@ export function PendingReceiptCard({
                         {idx + 1}. {item.product_name}
                       </p>
                       <p className="text-[11px] text-[#444748]">
-                        {item.received} {item.unit} received
-                        {item.damaged > 0 ? ` • ${item.damaged} damaged` : ''}
+                        {item.received} {formatUnit(item.unit, lang)} {t.receivedWord}
+                        {item.damaged > 0 ? ` • ${item.damaged} ${t.damagedWord}` : ''}
                       </p>
                     </div>
                     <span className="font-display text-sm font-extrabold text-[#141f00] bg-[#c6f26a] px-2.5 py-1 rounded-lg shrink-0">
-                      +{item.usable} {item.unit}
+                      +{item.usable} {formatUnit(item.unit, lang)}
                     </span>
                   </div>
                 ))}
               </div>
               <div className="bg-[#c6f26a] border border-[#b6e455] rounded-xl p-3 text-center">
                 <span className="block font-display text-[10px] font-bold text-[#141f00] uppercase tracking-wider">
-                  {t.usableToAdd} ({multiEntries.length} ITEMS)
+                  {t.usableToAdd} ({multiEntries.length})
                 </span>
                 <div className="font-display text-2xl font-extrabold text-[#141f00] leading-tight">
-                  +{multiEntries.reduce((sum, i) => sum + i.usable, 0)} total units
+                  +{multiEntries.reduce((sum, i) => sum + i.usable, 0)} {t.totalUnitsLabel}
                 </div>
                 <p className="text-[11px] text-[#141f00]/80 pt-0.5">{t.usableNote}</p>
               </div>
@@ -753,7 +785,7 @@ export function PendingReceiptCard({
                     </div>
                     {unit && (
                       <span className="block font-mono text-[10px] uppercase text-[#747878]">
-                        {unit}
+                        {unitDisplay}
                       </span>
                     )}
                   </div>
@@ -785,7 +817,7 @@ export function PendingReceiptCard({
                           damaged && damaged > 0 ? 'text-[#b54a42]/80' : 'text-[#747878]'
                         }`}
                       >
-                        {unit}
+                        {unitDisplay}
                       </span>
                     )}
                   </div>
@@ -801,7 +833,7 @@ export function PendingReceiptCard({
                   </div>
                   {unit && (
                     <span className="block font-mono text-[11px] font-bold uppercase text-[#141f00]/85">
-                      {unit}
+                      {unitDisplay}
                     </span>
                   )}
                   <p className="text-[11px] text-[#141f00]/80 pt-1 border-t border-[#141f00]/10">
@@ -813,7 +845,7 @@ export function PendingReceiptCard({
           )}
 
           {/* Read-Back Banner with Replay Speaker */}
-          {isAwaitingConfirm && parseResult?.readback_text && (
+          {isAwaitingConfirm && localizedReadback && (
             <div className="bg-[#faf9f5] border border-[#dedad1] rounded-xl p-3 space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
@@ -824,7 +856,7 @@ export function PendingReceiptCard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => speakText(parseResult.readback_text ?? '', lang)}
+                  onClick={() => speakText(localizedReadback, lang)}
                   aria-label="Replay read-back"
                   className="w-7 h-7 rounded-full bg-[#eae8e2] border border-[#dedad1] flex items-center justify-center text-[#1b1c18] hover:bg-[#dedad1] transition-colors"
                 >
@@ -832,8 +864,13 @@ export function PendingReceiptCard({
                 </button>
               </div>
               <p className="font-serif italic text-[14px] text-[#1b1c18] leading-snug">
-                “{parseResult.readback_text}”
+                “{localizedReadback}”
               </p>
+              {!browserHasVoice && (
+                <p className="text-[10px] text-[#7c4d19] leading-snug pt-0.5">
+                  {t.noOsVoiceNote}
+                </p>
+              )}
             </div>
           )}
 

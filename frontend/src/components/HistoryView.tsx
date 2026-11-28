@@ -23,7 +23,7 @@ export const HistoryView = memo(function HistoryView({ movements, lang }: Histor
           </h2>
         </div>
         <span className="font-display text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#eae8e2] text-[#1b1c18]">
-          {movements.length} Entries
+          {movements.length} {t.entriesSuffix}
         </span>
       </div>
 
@@ -55,11 +55,11 @@ export const HistoryView = memo(function HistoryView({ movements, lang }: Histor
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="font-display text-xs font-semibold px-2 py-0.5 rounded bg-[#39734c]/15 text-[#39734c]">
-                    +{m.usable_delta} usable
+                    +{m.usable_delta} {t.usableDeltaWord}
                   </span>
                   {m.damaged > 0 && (
                     <span className="font-display text-xs font-semibold px-2 py-0.5 rounded bg-[#b54a42]/15 text-[#b54a42]">
-                      {m.damaged} dmg
+                      {m.damaged} {t.dmgShortWord}
                     </span>
                   )}
                 </div>
@@ -80,7 +80,7 @@ export const HistoryView = memo(function HistoryView({ movements, lang }: Histor
                 </span>
                 {m.was_corrected && (
                   <span className="font-display text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-[#c6f26a] text-[#141f00]">
-                    CORRECTED
+                    {t.badgeCorrected}
                   </span>
                 )}
               </div>

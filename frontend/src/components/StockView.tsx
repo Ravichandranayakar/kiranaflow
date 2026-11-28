@@ -159,7 +159,7 @@ export const StockView = memo(function StockView({
         </div>
         <div className="flex items-center gap-2">
           <span className="font-display text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#eae8e2] text-[#1b1c18]">
-            {items.length} SKUs
+            {items.length} {t.skusCountSuffix}
           </span>
           <button
             type="button"
@@ -167,7 +167,7 @@ export const StockView = memo(function StockView({
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1c1b1b] text-[#c6f26a] font-display text-xs font-semibold hover:opacity-90"
           >
             {showAddForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            <span>{showAddForm ? 'Close' : 'Add Item'}</span>
+            <span>{showAddForm ? t.closeBtn : t.addItemBtn}</span>
           </button>
         </div>
       </div>
@@ -179,21 +179,21 @@ export const StockView = memo(function StockView({
           className="bg-white border border-[#dedad1] rounded-xl p-3.5 space-y-2.5 shadow-sm"
         >
           <p className="font-display text-xs font-bold uppercase tracking-wider text-[#1b1c18]">
-            Add New Product to Catalogue
+            {t.addProductTitle}
           </p>
           <input
             type="text"
             required
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Product name (e.g. Amul Butter 100g)"
+            placeholder={t.addProductNamePlaceholder}
             className="w-full px-3 py-2 rounded-lg bg-[#fbf9f3] border border-[#dedad1] text-xs font-medium text-[#1b1c18]"
           />
           <input
             type="text"
             value={newAliases}
             onChange={(e) => setNewAliases(e.target.value)}
-            placeholder="Spoken aliases, comma-separated (e.g. amul butter, butter, makkhan)"
+            placeholder={t.addProductAliasPlaceholder}
             className="w-full px-3 py-2 rounded-lg bg-[#fbf9f3] border border-[#dedad1] text-xs text-[#1b1c18]"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -228,7 +228,7 @@ export const StockView = memo(function StockView({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
-              <span className="font-mono text-[9px] uppercase text-[#444748]">Starting Stock</span>
+              <span className="font-mono text-[9px] uppercase text-[#444748]">{t.startingStockLabel}</span>
               <input
                 type="number"
                 min={0}
@@ -238,7 +238,7 @@ export const StockView = memo(function StockView({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="font-mono text-[9px] uppercase text-[#444748]">Low Alert (&lt;)</span>
+              <span className="font-mono text-[9px] uppercase text-[#444748]">{t.lowAlertLabel}</span>
               <input
                 type="number"
                 min={0}
@@ -253,7 +253,7 @@ export const StockView = memo(function StockView({
             disabled={savingProduct || newName.trim().length < 2}
             className="w-full py-2 rounded-lg bg-[#c6f26a] text-[#141f00] border border-[#171717] font-display text-xs font-bold uppercase tracking-wide disabled:opacity-40"
           >
-            {savingProduct ? 'Adding…' : 'Save to Store Catalogue'}
+            {savingProduct ? t.addingBtn : t.saveToCatalogueBtn}
           </button>
         </form>
       )}
@@ -314,7 +314,7 @@ export const StockView = memo(function StockView({
       <div className="space-y-2">
         {filtered.length === 0 ? (
           <div className="bg-white border border-[#dedad1] rounded-xl p-6 text-center text-sm text-[#747878]">
-            No items match this filter.
+            {t.noFilterMatches}
           </div>
         ) : (
           filtered.map((item) => {
@@ -354,7 +354,7 @@ export const StockView = memo(function StockView({
                   <div className="flex items-center gap-2.5 shrink-0">
                     <div className="text-right">
                       <span className="block font-display text-[9px] font-semibold text-[#39734c] uppercase">
-                        Usable
+                        {t.usableLabel}
                       </span>
                       <span className="font-display text-lg font-semibold text-[#1b1c18]">
                         {item.usable_stock}
@@ -362,7 +362,7 @@ export const StockView = memo(function StockView({
                     </div>
                     <div className="text-right pl-2 border-l border-[#eae8e2]">
                       <span className="block font-display text-[9px] font-semibold text-[#b54a42] uppercase">
-                        Return
+                        {t.returnLabel}
                       </span>
                       <span
                         className={`font-display text-lg font-semibold ${
@@ -417,7 +417,7 @@ export const StockView = memo(function StockView({
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
                         <span className="font-mono text-[9px] uppercase text-[#39734c] font-bold">
-                          Usable (+/-) → {nextUsable}
+                          {t.usableLabel} (+/-) → {nextUsable}
                         </span>
                         <input
                           type="number"
@@ -428,7 +428,7 @@ export const StockView = memo(function StockView({
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="font-mono text-[9px] uppercase text-[#b54a42] font-bold">
-                          Return (+/-) → {nextDamaged}
+                          {t.returnLabel} (+/-) → {nextDamaged}
                         </span>
                         <input
                           type="number"
@@ -444,7 +444,7 @@ export const StockView = memo(function StockView({
                         type="text"
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
-                        placeholder="Reason (e.g. Sold, Opening stock, Returned)"
+                        placeholder={t.reasonPlaceholder}
                         className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-white border border-[#dedad1] text-xs text-[#1b1c18]"
                       />
                       <button
@@ -457,13 +457,13 @@ export const StockView = memo(function StockView({
                         onClick={() => void applyAdjust(item)}
                         className="px-3 py-1.5 rounded-lg bg-[#1c1b1b] text-[#c6f26a] font-display text-xs font-semibold disabled:opacity-40 shrink-0"
                       >
-                        {savingAdjust ? 'Saving…' : 'Update'}
+                        {savingAdjust ? t.savingShortBtn : t.updateBtn}
                       </button>
                     </div>
 
                     {invalidNegative && (
                       <p className="text-[11px] font-medium text-[#b54a42]">
-                        Cannot reduce stock below 0.
+                        {t.cannotGoNegative}
                       </p>
                     )}
 
@@ -472,7 +472,7 @@ export const StockView = memo(function StockView({
                       {confirmDeleteId === item.product_id ? (
                         <>
                           <span className="text-[11px] font-medium text-[#b54a42]">
-                            Remove SKU &amp; history?
+                            {t.removeSkuConfirm}
                           </span>
                           <div className="flex items-center gap-1.5">
                             <button
@@ -480,7 +480,7 @@ export const StockView = memo(function StockView({
                               onClick={() => setConfirmDeleteId(null)}
                               className="px-2.5 py-1 rounded bg-[#eae8e2] text-[11px] font-semibold text-[#444748]"
                             >
-                              Keep
+                              {t.keepBtn}
                             </button>
                             <button
                               type="button"
@@ -493,7 +493,7 @@ export const StockView = memo(function StockView({
                               }}
                               className="px-2.5 py-1 rounded bg-[#b54a42] text-white text-[11px] font-semibold"
                             >
-                              Confirm Delete
+                              {t.confirmDeleteBtn}
                             </button>
                           </div>
                         </>
@@ -504,7 +504,7 @@ export const StockView = memo(function StockView({
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#b54a42] hover:underline"
                         >
                           <Trash2 className="w-3 h-3" />
-                          <span>Remove SKU from catalogue</span>
+                          <span>{t.removeSkuLink}</span>
                         </button>
                       )}
                     </div>
